@@ -42,7 +42,8 @@ func CreateEmbeddingProvider(ctx context.Context, modelName string, buildCtx Bui
 		}
 
 		embedModel, err = provider.New(ctx, &modelCfg, buildCtx.Env,
-			options.WithGateway(buildCtx.ModelsGateway))
+			options.WithGateway(buildCtx.ModelsGateway),
+			options.WithProviders(buildCtx.Providers))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create embedding model: %w", err)
 		}

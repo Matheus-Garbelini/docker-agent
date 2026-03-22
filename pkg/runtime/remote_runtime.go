@@ -82,6 +82,7 @@ func (r *RemoteRuntime) CurrentAgentInfo(ctx context.Context) CurrentAgentInfo {
 	return CurrentAgentInfo{
 		Name:        r.currentAgent,
 		Description: cfg.Description,
+		Instruction: cfg.Instruction,
 		Commands:    cfg.Commands,
 	}
 }
@@ -103,7 +104,7 @@ func (r *RemoteRuntime) CurrentAgentTools(_ context.Context) ([]tools.Tool, erro
 func (r *RemoteRuntime) EmitStartupInfo(ctx context.Context, _ *session.Session, events chan Event) {
 	cfg := r.readCurrentAgentConfig(ctx)
 
-	events <- AgentInfo(r.currentAgent, cfg.Model, cfg.Description, cfg.WelcomeMessage)
+	events <- AgentInfo(r.currentAgent, cfg.Model, cfg.Description, cfg.WelcomeMessage, cfg.Instruction)
 	events <- TeamInfo(r.agentDetailsFromConfig(ctx), r.currentAgent)
 
 	// Emit a loading indicator while we fetch the real tool count from the server.

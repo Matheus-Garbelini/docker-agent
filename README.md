@@ -8,14 +8,12 @@
 
 `docker-agent` lets you create and run intelligent AI agents that collaborate to solve complex problems — no code required.
 
-`docker-agent` is a `docker` CLI plugin and can be run with `docker agent`.
-
 Define agents in YAML, give them tools, and let them work.
 
 ```yaml
 agents:
   root:
-    model: openai/gpt-5-mini
+    model: openrouter/openai/gpt-5-mini
     description: A helpful AI assistant
     instruction: |
       You are a knowledgeable assistant that helps users with various tasks.
@@ -26,14 +24,14 @@ agents:
 ```
 
 ```sh
-docker agent run agent.yaml
+docker-agent run agent.yaml
 ```
 
 ## Key Features
 
 - **Multi-agent architecture** — Create teams of specialized agents that delegate tasks automatically
 - **Rich tool ecosystem** — Built-in tools + any [MCP](https://modelcontextprotocol.io/) server (local, remote, or Docker-based)
-- **AI provider agnostic** — OpenAI, Anthropic, Gemini, AWS Bedrock, Mistral, xAI, [Docker Model Runner](https://docs.docker.com/ai/model-runner/), and more
+- **AI provider agnostic** — OpenAI, OpenRouter, Anthropic, Gemini, AWS Bedrock, Mistral, xAI, [Docker Model Runner](https://docs.docker.com/ai/model-runner/), and more
 - **YAML configuration** — Declarative, versionable, shareable
 - **Advanced reasoning** — Built-in think, todo, and memory tools
 - **RAG** — Pluggable retrieval with BM25, embeddings, hybrid search, and reranking
@@ -41,32 +39,39 @@ docker agent run agent.yaml
 
 ## Install
 
-**Docker Desktop** (4.63+) — docker-agent CLI plugin is pre-installed. Just run `docker agent`.
+**Quick install (curl):**
 
-**Homebrew** — `brew install docker-agent`. Run `docker-agent` directly or symlink the binary to `~/.docker/cli-plugins/docker-agent` and run `docker agent`.
+```sh
+mkdir -p "$HOME/.local/bin" && \
+curl -fsSL https://github.com/Matheus-Garbelini/docker-agent/releases/latest/download/docker-agent \
+  -o "$HOME/.local/bin/docker-agent" && \
+chmod +x "$HOME/.local/bin/docker-agent"
+```
 
-**Binary releases** — Download from [GitHub Releases](https://github.com/docker/docker-agent/releases). Symlink the `docker-agent` binary to `~/.docker/cli-plugins/docker-agent` to be able to use `docker agent`, or use `docker-agent` directly.
+Make sure `$HOME/.local/bin` is in your `PATH` (add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile if needed).
+
+**Binary releases** — Download from [GitHub Releases](https://github.com/Matheus-Garbelini/docker-agent/releases).
 
 Set at least one API key (or use [Docker Model Runner](https://docs.docker.com/ai/model-runner/) for local models):
 
 ```sh
-export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
+export OPENAI_API_KEY=sk-...        # or OPENROUTER_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
 ```
 
 ## Quick Start
 
 ```sh
 # Run the default agent
-docker agent run
+docker-agent run
 
 # Run from the agent catalog
-docker agent run agentcatalog/pirate
+docker-agent run agentcatalog/pirate
 
 # Generate a new agent interactively
-docker agent new
+docker-agent new
 
 # Run your own config
-docker agent run agent.yaml
+docker-agent run agent.yaml
 ```
 
 More examples in the [`examples/`](examples/README.md) directory.
@@ -86,7 +91,7 @@ More examples in the [`examples/`](examples/README.md) directory.
 Read the [Contributing guide](https://docker.github.io/docker-agent/community/contributing) to get started. We use `docker-agent` to build `docker-agent`:
 
 ```sh
-docker agent run ./golang_developer.yaml
+docker-agent run ./golang_developer.yaml
 ```
 
 ## Telemetry

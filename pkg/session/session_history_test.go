@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/docker-agent/pkg/agent"
 	"github.com/docker/docker-agent/pkg/chat"
+	"github.com/docker/docker-agent/pkg/config/latest"
 	"github.com/docker/docker-agent/pkg/tools"
 )
 
@@ -45,7 +46,7 @@ func TestSessionNumHistoryItems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testAgent := agent.New("test-agent", "test instruction",
-				agent.WithNumHistoryItems(tt.numHistoryItems))
+				agent.WithCompaction(&latest.CompactionConfig{Type: latest.CompactionTypeRolling, Threshold: latest.CompactionThreshold{Kind: latest.ThresholdMessages, Value: float64(tt.numHistoryItems)}}))
 
 			s := New()
 			for i := range tt.messageCount {

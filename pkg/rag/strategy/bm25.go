@@ -480,8 +480,7 @@ func (s *BM25Strategy) calculateBM25Score(queryTerms []string, docTermFreq map[s
 		score += idf * (numerator / denominator)
 	}
 
-	// Normalize score to 0-1 range for consistency with vector similarity
-	return math.Min(score/float64(len(queryTerms)), 1.0)
+	return score
 }
 
 func (s *BM25Strategy) getAllDocuments(ctx context.Context) ([]database.Document, error) {

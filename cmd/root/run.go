@@ -59,6 +59,7 @@ type runExecFlags struct {
 
 	// Run only
 	hideToolResults bool
+	exportPath      string // populated from root --export flag
 }
 
 func newRunCmd() *cobra.Command {
@@ -123,6 +124,11 @@ func addRunOrExecFlags(cmd *cobra.Command, flags *runExecFlags) {
 }
 
 func (f *runExecFlags) runRunCommand(cmd *cobra.Command, args []string) error {
+	// Read the root-level --export flag.
+	if v, _ := cmd.Flags().GetString("export"); v != "" {
+		f.exportPath = v
+	}
+
 	// If --sandbox is set, delegate everything to docker sandbox.
 	if f.sandbox {
 		return runInSandbox(cmd, &f.runConfig, f.sandboxTemplate)
@@ -395,6 +401,7 @@ func (f *runExecFlags) handleExecMode(ctx context.Context, out *cli.Printer, rt 
 		HideToolCalls:  f.hideToolCalls,
 		OutputJSON:     f.outputJSON,
 		AutoApprove:    f.autoApprove,
+		ExportPath:     f.exportPath,
 	}, rt, sess, userMessages)
 	if cliErr, ok := errors.AsType[cli.RuntimeError](err); ok {
 		return RuntimeError{Err: cliErr.Err}
@@ -459,6 +466,13 @@ func (f *runExecFlags) buildAppOpts(args []string) ([]app.Opt, error) {
 	}
 	if f.exitAfterResponse {
 		opts = append(opts, app.WithExitAfterFirstResponse())
+	}
+	if f.exportPath != "" {
+		filename := ""
+		if f.exportPath != "true" {
+			filename = f.exportPath
+		}
+		opts = append(opts, app.WithAutoExport(filename))
 	}
 	return opts, nil
 }

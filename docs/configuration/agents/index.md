@@ -27,10 +27,17 @@ agents:
     add_date: boolean # Optional: add date to context
     add_environment_info: boolean # Optional: add env info to context
     add_prompt_files: [list] # Optional: include additional prompt files
+    add_prompt_scripts: [list] # Optional: run scripts and include output as prompt
     add_description_parameter: bool # Optional: add description to tool schema
     code_mode_tools: boolean # Optional: enable code mode tool format
     max_iterations: int # Optional: max tool-calling loops
-    num_history_items: int # Optional: limit conversation history
+    compaction: # Optional: session compaction strategy
+      type: string # summary (default), custom, rolling, or agent
+      threshold: string|int # e.g. "90%", 180000, "14m"
+      max_old_tool_call_tokens: int # Optional: truncate historical tool-call payloads
+      script: string # Shell command (type: custom only)
+      model: string # Model override (type: summary or agent)
+      agent: string # Agent name (type: agent only)
     skills: boolean # Optional: enable skill discovery
     commands: # Optional: named prompts
       name: "prompt text"
@@ -69,10 +76,11 @@ agents:
 | `add_date`                  | boolean | ✗        | When `true`, injects the current date into the agent's context.                                                                                                               |
 | `add_environment_info`      | boolean | ✗        | When `true`, injects working directory, OS, CPU architecture, and git info into context.                                                                                      |
 | `add_prompt_files`          | array   | ✗        | List of file paths whose contents are appended to the system prompt. Useful for including coding standards, guidelines, or additional context.                                |
+| `add_prompt_scripts`        | array   | ✗        | List of executable commands whose stdout is appended to the system prompt. Each entry is a command string (e.g. `python script.py arg1`). Runs with a 30s timeout.            |
 | `add_description_parameter` | boolean | ✗        | When `true`, adds agent descriptions as a parameter in tool schemas. Helps with tool selection in multi-agent scenarios.                                                      |
 | `code_mode_tools`           | boolean | ✗        | When `true`, formats tool responses in a code-optimized format with structured output schemas. Useful for MCP gateway and programmatic access.                                |
 | `max_iterations`            | int     | ✗        | Maximum number of tool-calling loops. Default: unlimited (0). Set this to prevent infinite loops.                                                                             |
-| `num_history_items`         | int     | ✗        | Limit the number of conversation history messages sent to the model. Useful for managing context window size with long conversations. Default: unlimited (all messages sent). |
+| `compaction`                | object  | ✗        | Session compaction configuration. Controls how conversation history is compacted. See [Session Compaction](#session-compaction) below.                                        |
 | `rag`                       | array   | ✗        | List of RAG source names to attach to this agent. References sources defined in the top-level `rag` section. See [RAG]({{ '/features/rag/' | relative_url }}).                                       |
 | `skills`                    | boolean | ✗        | Enable automatic skill discovery from standard directories.                                                                                                                   |
 | `commands`                  | object  | ✗        | Named prompts that can be run with `docker agent run config.yaml /command_name`.                                                                                              |
@@ -87,6 +95,90 @@ agents:
   <p>Default is <code>0</code> (unlimited). Always set <code>max_iterations</code> for agents with powerful tools like <code>shell</code> to prevent infinite loops. A value of 20–50 is typical for development agents.</p>
 
 </div>
+
+## Session Compaction
+
+docker-agent automatically compacts conversation history when it approaches the model's context window limit. By default, it uses a **summary** strategy that triggers at **90%** of the context window. You can customize this behavior with the `compaction` block.
+
+### Compaction Properties
+
+| Property    | Type       | Description                                                                                                    |
+| ----------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
+| `type`      | string     | Strategy: `summary` (default), `custom`, `rolling`, or `agent`.                                               |
+| `threshold` | string/int | When to trigger. Percentage (`"90%"`), token count (`180000`), or message count for rolling (`"14m"`).         |
+| `max_old_tool_call_tokens` | int | Max token budget retained for older tool call arguments/results before placeholder truncation. `0` uses the default (`40000`), `-1` disables truncation. |
+| `script`    | string     | Shell command for `type: custom`. Receives JSON on stdin, returns JSON array on stdout.                        |
+| `model`     | string     | Model override for summarization (`type: summary` or `type: agent`).                                          |
+| `agent`     | string     | Agent name for `type: agent`. Must reference an agent in the `agents` section.                                 |
+
+### Summary Compaction (default)
+
+Generates a summary of the conversation when the threshold is exceeded. This is the default strategy.
+
+```yaml
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Development assistant
+    instruction: You are a helpful coding assistant.
+    compaction:
+      type: summary
+      threshold: "90%"
+      max_old_tool_call_tokens: 40000
+      model: openai/gpt-4o  # Optional: override model for summary generation
+```
+
+### Custom Script Compaction
+
+Run an external script that decides which messages to keep. The script receives the current context messages as a JSON array on stdin and must return a replacement JSON array on stdout. System messages in the output are ignored (docker-agent rebuilds system context on each turn). If the script fails, times out (30s), or returns invalid JSON, docker-agent falls back to built-in summarization.
+
+```yaml
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Development assistant
+    instruction: You are a helpful coding assistant.
+    compaction:
+      type: custom
+      threshold: 180000
+      script: python3 examples/compaction_script.py
+```
+
+### Rolling Compaction
+
+Removes the oldest messages to keep only the most recent ones. Useful for agents where the latest context is most important.
+
+```yaml
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Chat assistant
+    instruction: You are a helpful assistant.
+    compaction:
+      type: rolling
+      threshold: "14m"   # Keep the 14 most recent messages
+```
+
+### Agent-Based Compaction
+
+Delegates compaction to another agent defined in the configuration. The compaction agent can use a different model or specialized instructions for generating summaries.
+
+```yaml
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Development assistant
+    instruction: You are a helpful coding assistant.
+    compaction:
+      type: agent
+      threshold: 180000
+      agent: compaction_agent
+
+  compaction_agent:
+    model: openai/gpt-4o-mini
+    description: Summarizes conversations efficiently
+    instruction: You are a session compaction specialist. Summarize conversations concisely while preserving key decisions, code snippets, and action items.
+```
 
 ## Welcome Message
 

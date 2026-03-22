@@ -137,6 +137,7 @@ func (r *LocalRuntime) RunStream(ctx context.Context, sess *session.Session) <-c
 		// tool calls. It applies for one LLM turn, then resets.
 		var toolModelOverride string
 		var prevAgentName string
+		var hadToolCalls bool // tracks whether the previous turn made tool calls
 
 		for {
 			a = r.resolveSessionAgent(sess)
@@ -244,7 +245,7 @@ func (r *LocalRuntime) RunStream(ctx context.Context, sess *session.Session) <-c
 			// Notify sidebar of the model for this turn. For rule-based
 			// routing, the actual routed model is emitted from within the
 			// stream once the first chunk arrives.
-			events <- AgentInfo(a.Name(), modelID, a.Description(), a.WelcomeMessage())
+			events <- AgentInfo(a.Name(), modelID, a.Description(), a.WelcomeMessage(), a.Instruction())
 
 			slog.Debug("Using agent", "agent", a.Name(), "model", modelID)
 			slog.Debug("Getting model definition", "model_id", modelID)
@@ -258,7 +259,7 @@ func (r *LocalRuntime) RunStream(ctx context.Context, sess *session.Session) <-c
 				contextLimit = int64(m.Limit.Context)
 			}
 
-			if m != nil && r.sessionCompaction && compaction.ShouldCompact(sess.InputTokens, sess.OutputTokens, 0, contextLimit) {
+			if m != nil && r.sessionCompaction && compaction.ShouldCompactWithThreshold(sess.InputTokens, sess.OutputTokens, 0, contextLimit, a.CompactionConfig().EffectiveThresholdTokens(contextLimit)) {
 				r.Summarize(ctx, sess, "", events)
 			}
 
@@ -320,7 +321,7 @@ func (r *LocalRuntime) RunStream(ctx context.Context, sess *session.Session) <-c
 
 			if usedModel != nil && usedModel.ID() != model.ID() {
 				slog.Info("Used fallback model", "agent", a.Name(), "primary", model.ID(), "used", usedModel.ID())
-				events <- AgentInfo(a.Name(), usedModel.ID(), a.Description(), a.WelcomeMessage())
+				events <- AgentInfo(a.Name(), usedModel.ID(), a.Description(), a.WelcomeMessage(), a.Instruction())
 			}
 			streamSpan.SetAttributes(
 				attribute.Int("tool.calls", len(res.Calls)),
@@ -363,11 +364,26 @@ func (r *LocalRuntime) RunStream(ctx context.Context, sess *session.Session) <-c
 			// Record per-toolset model override for the next LLM turn.
 			toolModelOverride = resolveToolCallModelOverride(res.Calls, agentTools)
 
-			if res.Stopped {
+			if res.Stopped && len(res.Calls) == 0 {
+				// If the model stopped without content right after tool calls,
+				// nudge it with a user message and give it one more turn.
+				if hadToolCalls && res.Content == "" {
+					slog.Debug("Model stopped without content after tool calls, retrying", "agent", a.Name())
+					nudge := &chat.Message{
+						Role:      chat.MessageRoleUser,
+						Content:   "Reply to the provided tool response.",
+						CreatedAt: time.Now().Format(time.RFC3339),
+					}
+					addAgentMessage(sess, a, nudge, events)
+					hadToolCalls = false
+					continue
+				}
 				slog.Debug("Conversation stopped", "agent", a.Name())
 				r.executeStopHooks(ctx, sess, a, res.Content, events)
 				break
 			}
+
+			hadToolCalls = len(res.Calls) > 0
 
 			r.compactIfNeeded(ctx, sess, a, m, contextLimit, messageCountBeforeTools, events)
 		}
@@ -486,7 +502,7 @@ func (r *LocalRuntime) compactIfNeeded(
 		addedTokens += compaction.EstimateMessageTokens(&msg.Message)
 	}
 
-	if !compaction.ShouldCompact(sess.InputTokens, sess.OutputTokens, addedTokens, contextLimit) {
+	if !compaction.ShouldCompactWithThreshold(sess.InputTokens, sess.OutputTokens, addedTokens, contextLimit, a.CompactionConfig().EffectiveThresholdTokens(contextLimit)) {
 		return
 	}
 

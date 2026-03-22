@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker-agent/pkg/model/provider/dmr"
 	"github.com/docker/docker-agent/pkg/model/provider/gemini"
 	"github.com/docker/docker-agent/pkg/model/provider/openai"
+	"github.com/docker/docker-agent/pkg/model/provider/openrouter"
 	"github.com/docker/docker-agent/pkg/model/provider/options"
 	"github.com/docker/docker-agent/pkg/model/provider/rulebased"
 	"github.com/docker/docker-agent/pkg/rag/types"
@@ -36,6 +37,7 @@ var CoreProviders = []string{
 	"openai",
 	"anthropic",
 	"google",
+	"openrouter",
 	"dmr",
 	"amazon-bedrock",
 }
@@ -243,6 +245,8 @@ func createDirectProvider(ctx context.Context, cfg *latest.ModelConfig, env envi
 		return anthropic.NewClient(ctx, enhancedCfg, env, opts...)
 	case "google":
 		return gemini.NewClient(ctx, enhancedCfg, env, opts...)
+	case "openrouter":
+		return openrouter.NewClient(ctx, enhancedCfg, env, opts...)
 	case "dmr":
 		return dmr.NewClient(ctx, enhancedCfg, opts...)
 	case "amazon-bedrock":
@@ -375,6 +379,12 @@ func applyModelDefaults(cfg *latest.ModelConfig) {
 			slog.Debug("Applied default thinking for thinking-only OpenAI model",
 				"provider", cfg.Provider, "model", cfg.Model)
 		}
+	case "openrouter":
+		if isOpenRouterThinkingOnlyModel(cfg.Model) {
+			cfg.ThinkingBudget = &latest.ThinkingBudget{Effort: "high"}
+			slog.Debug("Applied default thinking for OpenAI reasoning model via OpenRouter",
+				"provider", cfg.Provider, "model", cfg.Model)
+		}
 	}
 }
 
@@ -419,6 +429,14 @@ func isOpenAIThinkingOnlyModel(model string) bool {
 	return strings.HasPrefix(m, "o1") ||
 		strings.HasPrefix(m, "o3") ||
 		strings.HasPrefix(m, "o4")
+}
+
+func isOpenRouterThinkingOnlyModel(model string) bool {
+	m := strings.ToLower(model)
+	if _, routedModel, ok := strings.Cut(m, "/"); ok {
+		return isOpenAIThinkingOnlyModel(routedModel)
+	}
+	return isOpenAIThinkingOnlyModel(m)
 }
 
 // isBedrockClaudeModel returns true if the model ID is a Claude model on Bedrock.

@@ -54,6 +54,7 @@ var markdown = goldmark.New(
 type SessionData struct {
 	Title            string
 	AgentDescription string
+	SystemPrompt     string
 	CreatedAt        time.Time
 	InputTokens      int64
 	OutputTokens     int64
@@ -82,12 +83,13 @@ type ToolCall struct {
 // SessionToFile exports a session to an HTML file.
 // If filename is empty, a default name based on the title and timestamp is used.
 // Returns the absolute path of the created file.
-func SessionToFile(sess *session.Session, agentDescription, filename string) (string, error) {
+func SessionToFile(sess *session.Session, agentDescription, instruction, filename string) (string, error) {
 	if sess == nil {
 		return "", errors.New("no session to export")
 	}
 	data := sessionToData(sess)
 	data.AgentDescription = agentDescription
+	data.SystemPrompt = instruction
 	return ToFile(data, filename)
 }
 
@@ -192,6 +194,7 @@ type templateData struct {
 	MessagesHTML     template.HTML
 	PrimaryAgent     string
 	AgentDescription string
+	SystemPromptHTML template.HTML
 	ToolsUsedCount   int
 	TotalTokens      int64
 	FormattedTokens  string
@@ -354,6 +357,18 @@ func Generate(data SessionData) (string, error) {
 		return "", fmt.Errorf("failed to parse main template: %w", err)
 	}
 
+	// Render system prompt as collapsible HTML
+	var systemPromptHTML string
+	if data.SystemPrompt != "" {
+		var mdBuf bytes.Buffer
+		if err := markdown.Convert([]byte(data.SystemPrompt), &mdBuf); err != nil {
+			// Fallback to escaped plain text
+			systemPromptHTML = template.HTMLEscapeString(data.SystemPrompt)
+		} else {
+			systemPromptHTML = mdBuf.String()
+		}
+	}
+
 	tplData := templateData{
 		Title:            title,
 		CSS:              template.CSS(cssStyles),
@@ -363,6 +378,7 @@ func Generate(data SessionData) (string, error) {
 		MessagesHTML:     template.HTML(messagesBuilder.String()), //nolint:gosec // Content is already escaped by sub-templates
 		PrimaryAgent:     primaryAgent,
 		AgentDescription: data.AgentDescription,
+		SystemPromptHTML: template.HTML(systemPromptHTML), //nolint:gosec // Content is rendered from markdown
 		ToolsUsedCount:   len(toolsUsed),
 		TotalTokens:      totalTokens,
 		FormattedTokens:  formatTokens(totalTokens),

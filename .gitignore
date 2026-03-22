@@ -8,6 +8,8 @@ evals
 .vscode
 .idea/
 *.debug
+*.pyc
+/*.log
 
 # agents
 agent.yaml
@@ -21,3 +23,4 @@ vendor
 /cagent
 /cagent-*
 /docker-mcp-*
+/.venv

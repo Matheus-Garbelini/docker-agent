@@ -333,9 +333,10 @@ func SessionTitle(sessionID, title string) Event {
 type SessionSummaryEvent struct {
 	AgentContext
 
-	Type      string `json:"type"`
-	SessionID string `json:"session_id"`
-	Summary   string `json:"summary"`
+	Type               string         `json:"type"`
+	SessionID          string         `json:"session_id"`
+	Summary            string         `json:"summary"`
+	CompactionMessages []chat.Message `json:"compaction_messages,omitempty"`
 }
 
 func SessionSummary(sessionID, summary, agentName string) Event {
@@ -344,6 +345,19 @@ func SessionSummary(sessionID, summary, agentName string) Event {
 		SessionID:    sessionID,
 		Summary:      summary,
 		AgentContext: newAgentContext(agentName),
+	}
+}
+
+func SessionSummaryWithMessages(sessionID, summary, agentName string, messages []chat.Message) Event {
+	if messages == nil {
+		messages = []chat.Message{}
+	}
+	return &SessionSummaryEvent{
+		Type:               "session_summary",
+		SessionID:          sessionID,
+		Summary:            summary,
+		CompactionMessages: messages,
+		AgentContext:       newAgentContext(agentName),
 	}
 }
 
@@ -470,15 +484,17 @@ type AgentInfoEvent struct {
 	Model          string `json:"model"` // this is in provider/model format (e.g., "openai/gpt-4o")
 	Description    string `json:"description"`
 	WelcomeMessage string `json:"welcome_message,omitempty"`
+	Instruction    string `json:"instruction,omitempty"`
 }
 
-func AgentInfo(agentName, model, description, welcomeMessage string) Event {
+func AgentInfo(agentName, model, description, welcomeMessage, instruction string) Event {
 	return &AgentInfoEvent{
 		Type:           "agent_info",
 		AgentName:      agentName,
 		Model:          model,
 		Description:    description,
 		WelcomeMessage: welcomeMessage,
+		Instruction:    instruction,
 		AgentContext:   newAgentContext(agentName),
 	}
 }

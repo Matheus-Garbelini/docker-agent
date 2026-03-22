@@ -77,15 +77,26 @@ func BuildPrompt(messages []chat.Message, additionalPrompt string) []chat.Messag
 }
 
 // ShouldCompact reports whether a session's context usage has crossed the
-// compaction threshold. It returns true when the estimated total token count
-// (input + output + addedTokens) exceeds [contextThreshold] (90%) of
-// contextLimit. A non-positive contextLimit is treated as unlimited and
-// always returns false.
+// default compaction threshold. It returns true when the estimated total token
+// count (input + output + addedTokens) exceeds [contextThreshold] (90%) of
+// contextLimit. A non-positive contextLimit is treated as unlimited and always
+// returns false.
 func ShouldCompact(inputTokens, outputTokens, addedTokens, contextLimit int64) bool {
+	return ShouldCompactWithThreshold(inputTokens, outputTokens, addedTokens, contextLimit, 0)
+}
+
+// ShouldCompactWithThreshold reports whether compaction should run. When
+// thresholdTokens is positive it is treated as an absolute token threshold and
+// contextLimit is ignored. Otherwise the default relative threshold based on
+// contextLimit is used.
+func ShouldCompactWithThreshold(inputTokens, outputTokens, addedTokens, contextLimit, thresholdTokens int64) bool {
+	estimated := inputTokens + outputTokens + addedTokens
+	if thresholdTokens > 0 {
+		return estimated > thresholdTokens
+	}
 	if contextLimit <= 0 {
 		return false
 	}
-	estimated := inputTokens + outputTokens + addedTokens
 	return estimated > int64(float64(contextLimit)*contextThreshold)
 }
 

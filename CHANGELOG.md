@@ -11,7 +11,7 @@ This release adds WebSocket transport support for OpenAI streaming, introduces c
 
 - Adds WebSocket transport option for OpenAI Responses API streaming as an alternative to SSE
 - Adds `/clear` command to reset current tab with a new session
-- Adds configurable `max_old_tool_call_tokens` setting in agent YAML to control historical tool call content retention
+- Adds configurable `compaction.max_old_tool_call_tokens` setting in agent YAML to control historical tool call content retention
 
 ## Improvements
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -234,6 +235,198 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.String())
 }
 
+// Compaction strategy types.
+const (
+	CompactionTypeSummary = "summary"
+	CompactionTypeCustom  = "custom"
+	CompactionTypeRolling = "rolling"
+	CompactionTypeAgent   = "agent"
+)
+
+// ThresholdKind indicates how a CompactionThreshold value should be interpreted.
+type ThresholdKind int
+
+const (
+	// ThresholdDefault means no explicit threshold was set; use the default (90% of context window).
+	ThresholdDefault ThresholdKind = iota
+	// ThresholdPercentage is a fraction of the model's context window (e.g. 0.9 for "90%").
+	ThresholdPercentage
+	// ThresholdTokens is an absolute token count.
+	ThresholdTokens
+	// ThresholdMessages is a message count (for rolling compaction).
+	ThresholdMessages
+)
+
+// CompactionThreshold is a flexible threshold value that can represent a
+// percentage of the context window (e.g. "90%"), an absolute token count
+// (e.g. 180000), or a message count (e.g. "14m").
+type CompactionThreshold struct {
+	Kind  ThresholdKind
+	Value float64 // percentage as fraction (0.9), tokens as count, or message count
+}
+
+// IsZero reports whether this is the zero/default value.
+func (ct *CompactionThreshold) IsZero() bool {
+	return ct.Kind == ThresholdDefault && ct.Value == 0
+}
+
+// Tokens returns the threshold as an absolute token count. For a percentage
+// threshold, contextLimit is required. For messages it returns 0.
+func (ct *CompactionThreshold) Tokens(contextLimit int64) int64 {
+	switch ct.Kind {
+	case ThresholdTokens:
+		return int64(ct.Value)
+	case ThresholdPercentage:
+		if contextLimit <= 0 {
+			return 0
+		}
+		return int64(ct.Value * float64(contextLimit))
+	default:
+		return 0
+	}
+}
+
+// Messages returns the threshold as a message count, or 0 if not a message threshold.
+func (ct *CompactionThreshold) Messages() int {
+	if ct.Kind == ThresholdMessages {
+		return int(ct.Value)
+	}
+	return 0
+}
+
+func parseCompactionThreshold(s string) (CompactionThreshold, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return CompactionThreshold{}, nil
+	}
+	if pctStr, ok := strings.CutSuffix(s, "%"); ok {
+		pct, err := strconv.ParseFloat(pctStr, 64)
+		if err != nil || pct <= 0 || pct > 100 {
+			return CompactionThreshold{}, fmt.Errorf("invalid percentage threshold %q: must be between 0 and 100", s)
+		}
+		return CompactionThreshold{Kind: ThresholdPercentage, Value: pct / 100}, nil
+	}
+	if numStr, ok := strings.CutSuffix(s, "m"); ok {
+		n, err := strconv.Atoi(numStr)
+		if err != nil || n <= 0 {
+			return CompactionThreshold{}, fmt.Errorf("invalid message threshold %q: must be a positive integer followed by 'm'", s)
+		}
+		return CompactionThreshold{Kind: ThresholdMessages, Value: float64(n)}, nil
+	}
+	// Try parsing as integer token count
+	tokens, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || tokens <= 0 {
+		return CompactionThreshold{}, fmt.Errorf("invalid threshold %q: must be a percentage (e.g. '90%%'), token count (e.g. 180000), or message count (e.g. '14m')", s)
+	}
+	return CompactionThreshold{Kind: ThresholdTokens, Value: float64(tokens)}, nil
+}
+
+func (ct *CompactionThreshold) UnmarshalYAML(unmarshal func(any) error) error {
+	var intVal int64
+	if err := unmarshal(&intVal); err == nil {
+		if intVal <= 0 {
+			return fmt.Errorf("threshold must be positive, got %d", intVal)
+		}
+		*ct = CompactionThreshold{Kind: ThresholdTokens, Value: float64(intVal)}
+		return nil
+	}
+	var s string
+	if err := unmarshal(&s); err != nil {
+		return errors.New("threshold must be a number or string (e.g. 180000, '90%', '14m')")
+	}
+	parsed, err := parseCompactionThreshold(s)
+	if err != nil {
+		return err
+	}
+	*ct = parsed
+	return nil
+}
+
+func (ct *CompactionThreshold) MarshalYAML() (any, error) {
+	switch ct.Kind {
+	case ThresholdPercentage:
+		return fmt.Sprintf("%.0f%%", ct.Value*100), nil
+	case ThresholdTokens:
+		return int64(ct.Value), nil
+	case ThresholdMessages:
+		return fmt.Sprintf("%dm", int(ct.Value)), nil
+	default:
+		return nil, nil
+	}
+}
+
+func (ct *CompactionThreshold) UnmarshalJSON(data []byte) error {
+	var intVal int64
+	if err := json.Unmarshal(data, &intVal); err == nil {
+		if intVal <= 0 {
+			return fmt.Errorf("threshold must be positive, got %d", intVal)
+		}
+		*ct = CompactionThreshold{Kind: ThresholdTokens, Value: float64(intVal)}
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return errors.New("threshold must be a number or string (e.g. 180000, \"90%\", \"14m\")")
+	}
+	parsed, err := parseCompactionThreshold(s)
+	if err != nil {
+		return err
+	}
+	*ct = parsed
+	return nil
+}
+
+func (ct *CompactionThreshold) MarshalJSON() ([]byte, error) {
+	switch ct.Kind {
+	case ThresholdPercentage:
+		return json.Marshal(fmt.Sprintf("%.0f%%", ct.Value*100))
+	case ThresholdTokens:
+		return json.Marshal(int64(ct.Value))
+	case ThresholdMessages:
+		return json.Marshal(fmt.Sprintf("%dm", int(ct.Value)))
+	default:
+		return json.Marshal(nil)
+	}
+}
+
+// CompactionConfig defines how session compaction is performed.
+type CompactionConfig struct {
+	// Type is the compaction strategy: "summary" (default), "custom", "rolling", or "agent".
+	Type string `json:"type,omitempty"`
+	// Threshold controls when compaction triggers. Accepts a percentage (e.g. "90%"),
+	// an absolute token count (e.g. 180000), or a message count (e.g. "14m" for rolling).
+	Threshold CompactionThreshold `json:"threshold,omitzero" yaml:"threshold,omitempty" jsonschema:"oneof_type=integer;string"`
+	// MaxOldToolCallTokens is the maximum token budget to keep from older tool call
+	// arguments and results before replacing them with placeholders.
+	// Set to -1 to disable truncation (unlimited). Default: 40000.
+	MaxOldToolCallTokens int `json:"max_old_tool_call_tokens,omitempty" yaml:"max_old_tool_call_tokens,omitempty"`
+	// Script is the shell command for type "custom". Receives messages as JSON on stdin,
+	// must return a JSON array of messages on stdout.
+	Script string `json:"script,omitempty"`
+	// Model optionally overrides the model used for summarization (type "summary" or "agent").
+	Model string `json:"model,omitempty"`
+	// Agent is the name of another agent to use for compaction (type "agent").
+	Agent string `json:"agent,omitempty"`
+}
+
+// EffectiveType returns the compaction type, defaulting to "summary" when empty.
+func (c *CompactionConfig) EffectiveType() string {
+	if c == nil || c.Type == "" {
+		return CompactionTypeSummary
+	}
+	return c.Type
+}
+
+// EffectiveThresholdTokens returns the absolute token threshold for compaction.
+// For percentage-based thresholds, contextLimit is used to compute the value.
+// Returns 0 when the default 90% heuristic should be used.
+func (c *CompactionConfig) EffectiveThresholdTokens(contextLimit int64) int64 {
+	if c == nil {
+		return 0
+	}
+	return c.Threshold.Tokens(contextLimit)
+}
+
 // AgentConfig represents a single agent configuration
 type AgentConfig struct {
 	Name                    string
@@ -252,9 +445,9 @@ type AgentConfig struct {
 	AddDescriptionParameter bool              `json:"add_description_parameter,omitempty"`
 	MaxIterations           int               `json:"max_iterations,omitempty"`
 	MaxConsecutiveToolCalls int               `json:"max_consecutive_tool_calls,omitempty"`
-	MaxOldToolCallTokens    int               `json:"max_old_tool_call_tokens,omitempty"`
-	NumHistoryItems         int               `json:"num_history_items,omitempty"`
+	Compaction              *CompactionConfig `json:"compaction,omitempty"`
 	AddPromptFiles          []string          `json:"add_prompt_files,omitempty" yaml:"add_prompt_files,omitempty"`
+	AddPromptScripts        []string          `json:"add_prompt_scripts,omitempty" yaml:"add_prompt_scripts,omitempty"`
 	Commands                types.Commands    `json:"commands,omitempty"`
 	StructuredOutput        *StructuredOutput `json:"structured_output,omitempty"`
 	Skills                  SkillsConfig      `json:"skills,omitzero"`

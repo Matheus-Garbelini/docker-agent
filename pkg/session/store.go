@@ -101,6 +101,9 @@ type Store interface {
 	// AddSummary adds a summary item to a session at the next position
 	AddSummary(ctx context.Context, sessionID, summary string) error
 
+	// AddCompactionMessages adds a structured compaction item to a session at the next position.
+	AddCompactionMessages(ctx context.Context, sessionID string, messages []chat.Message) error
+
 	// === Granular metadata updates ===
 
 	// UpdateSessionTokens updates only token/cost fields
@@ -313,6 +316,21 @@ func (s *InMemorySessionStore) AddSummary(_ context.Context, sessionID, summary 
 	}
 	session.mu.Lock()
 	session.Messages = append(session.Messages, Item{Summary: summary})
+	session.mu.Unlock()
+	return nil
+}
+
+// AddCompactionMessages adds a compaction item to a session at the next position.
+func (s *InMemorySessionStore) AddCompactionMessages(_ context.Context, sessionID string, messages []chat.Message) error {
+	if sessionID == "" {
+		return ErrEmptyID
+	}
+	session, exists := s.sessions.Load(sessionID)
+	if !exists {
+		return ErrNotFound
+	}
+	session.mu.Lock()
+	session.Messages = append(session.Messages, NewCompactionItem(messages, 0))
 	session.mu.Unlock()
 	return nil
 }
@@ -672,6 +690,56 @@ func (s *SQLiteSessionStore) loadSessionItems(ctx context.Context, sessionID str
 	return s.loadSessionItemsWith(ctx, s.db, sessionID)
 }
 
+func (s *SQLiteSessionStore) syncMessagesColumn(ctx context.Context, sessionID string) error {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(sessions)`)
+	if err != nil {
+		return fmt.Errorf("querying sessions table info: %w", err)
+	}
+	defer rows.Close()
+
+	hasMessagesColumn := false
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			colType    string
+			notNull    int
+			defaultV   sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultV, &primaryKey); err != nil {
+			return fmt.Errorf("scanning sessions table info: %w", err)
+		}
+		if name == "messages" {
+			hasMessagesColumn = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterating sessions table info: %w", err)
+	}
+	if !hasMessagesColumn {
+		return nil
+	}
+
+	items, err := s.loadSessionItems(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("loading session items for legacy messages sync: %w", err)
+	}
+
+	itemsJSON, err := json.Marshal(items)
+	if err != nil {
+		return fmt.Errorf("marshaling legacy messages column: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, "UPDATE sessions SET messages = ? WHERE id = ?", string(itemsJSON), sessionID)
+	if err != nil {
+		return fmt.Errorf("updating legacy messages column: %w", err)
+	}
+
+	return nil
+}
+
 // loadSessionItemsWith loads items using the provided querier (db or tx).
 func (s *SQLiteSessionStore) loadSessionItemsWith(ctx context.Context, q querier, sessionID string) ([]Item, error) {
 	rows, err := q.QueryContext(ctx,
@@ -716,6 +784,13 @@ func (s *SQLiteSessionStore) loadSessionItemsWith(ctx context.Context, q querier
 					Implicit:  row.implicit,
 				},
 			})
+
+		case "compaction":
+			var messages []chat.Message
+			if err := json.Unmarshal([]byte(row.messageJSON.String), &messages); err != nil {
+				return nil, fmt.Errorf("unmarshaling compaction item at position %d: %w", row.position, err)
+			}
+			items = append(items, Item{CompactionMessages: messages})
 
 		case "subsession":
 			// Skip if subsession_id is NULL (can happen if the sub-session was deleted
@@ -1143,6 +1218,17 @@ func (s *SQLiteSessionStore) addItemTx(ctx context.Context, tx *sql.Tx, sessionI
 			sessionID, position, item.Message.AgentName, string(msgJSON), item.Message.Implicit)
 		return err
 
+	case item.IsCompaction():
+		msgJSON, err := json.Marshal(item.CompactionMessages)
+		if err != nil {
+			return fmt.Errorf("marshaling compaction messages: %w", err)
+		}
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO session_items (session_id, position, item_type, message_json)
+			 VALUES (?, ?, 'compaction', ?)`,
+			sessionID, position, string(msgJSON))
+		return err
+
 	case item.SubSession != nil:
 		// Recursively add the sub-session
 		subSession := item.SubSession
@@ -1188,6 +1274,32 @@ func (s *SQLiteSessionStore) AddSummary(ctx context.Context, sessionID, summary 
 		sessionID, sessionID, summary)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// AddCompactionMessages adds a structured compaction item to a session at the next position.
+func (s *SQLiteSessionStore) AddCompactionMessages(ctx context.Context, sessionID string, messages []chat.Message) error {
+	if sessionID == "" {
+		return ErrEmptyID
+	}
+
+	msgJSON, err := json.Marshal(messages)
+	if err != nil {
+		return fmt.Errorf("marshaling compaction messages: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO session_items (session_id, position, item_type, message_json)
+		 VALUES (?, (SELECT COALESCE(MAX(position), -1) + 1 FROM session_items WHERE session_id = ?), 'compaction', ?)`,
+		sessionID, sessionID, string(msgJSON))
+	if err != nil {
+		return err
+	}
+
+	if syncErr := s.syncMessagesColumn(ctx, sessionID); syncErr != nil {
+		slog.Warn("[STORE] Failed to sync messages column", "session_id", sessionID, "error", syncErr)
 	}
 
 	return nil

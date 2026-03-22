@@ -153,6 +153,7 @@ type PermissionsInfo struct {
 type CurrentAgentInfo struct {
 	Name        string
 	Description string
+	Instruction string
 	Commands    types.Commands
 }
 
@@ -350,6 +351,7 @@ func (r *LocalRuntime) CurrentAgentInfo(context.Context) CurrentAgentInfo {
 	return CurrentAgentInfo{
 		Name:        currentAgent.Name(),
 		Description: currentAgent.Description(),
+		Instruction: currentAgent.Instruction(),
 		Commands:    currentAgent.Commands(),
 	}
 }
@@ -841,7 +843,8 @@ func (r *LocalRuntime) EmitStartupInfo(ctx context.Context, sess *session.Sessio
 	// Emit agent and team information immediately for fast sidebar display
 	// Use getEffectiveModelID to account for active fallback cooldowns
 	modelID := r.getEffectiveModelID(a)
-	if !send(AgentInfo(a.Name(), modelID, a.Description(), a.WelcomeMessage())) {
+	fullPrompt := session.BuildFullSystemPrompt(a, sess)
+	if !send(AgentInfo(a.Name(), modelID, a.Description(), a.WelcomeMessage(), fullPrompt)) {
 		return
 	}
 	if !send(TeamInfo(r.agentDetailsFromTeam(), r.CurrentAgentName())) {

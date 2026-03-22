@@ -71,7 +71,7 @@ func (r *LocalRuntime) setModelAndEmitInfo(ctx context.Context, modelRef string,
 	}
 
 	if a, err := r.team.Agent(currentName); err == nil {
-		events <- AgentInfo(a.Name(), r.getEffectiveModelID(a), a.Description(), a.WelcomeMessage())
+		events <- AgentInfo(a.Name(), r.getEffectiveModelID(a), a.Description(), a.WelcomeMessage(), a.Instruction())
 	} else {
 		slog.Warn("Failed to retrieve agent after model change; UI may not reflect the update", "agent", currentName, "error", err)
 	}

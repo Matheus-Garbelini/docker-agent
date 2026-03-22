@@ -28,6 +28,7 @@ var cloudProviders = []providerConfig{
 		"GOOGLE_GENAI_USE_VERTEXAI",
 	}, "GOOGLE_API_KEY (or GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI)"},
 	{"mistral", []string{"MISTRAL_API_KEY"}, "MISTRAL_API_KEY"},
+	{"openrouter", []string{"OPENROUTER_API_KEY"}, "OPENROUTER_API_KEY"},
 	{"amazon-bedrock", []string{
 		"AWS_BEARER_TOKEN_BEDROCK",
 		"AWS_ACCESS_KEY_ID",
@@ -56,6 +57,7 @@ var DefaultModels = map[string]string{
 	"openai":         "gpt-5-mini",
 	"anthropic":      "claude-sonnet-4-5",
 	"google":         "gemini-2.5-flash",
+	"openrouter":     "openai/gpt-5-mini",
 	"dmr":            "ai/qwen3:latest",
 	"mistral":        "mistral-small-latest",
 	"amazon-bedrock": "global.anthropic.claude-sonnet-4-5-20250929-v1:0",

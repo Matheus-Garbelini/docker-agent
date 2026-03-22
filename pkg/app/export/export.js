@@ -15,3 +15,20 @@ document.addEventListener('keydown', (e) => {
         document.querySelectorAll('.chevron-down').forEach(icon => icon.style.display = 'none');
     }
 });
+
+// Prevent browser scroll restoration so we always land at the bottom.
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
+function scrollToBottom() {
+    window.scrollTo(0, document.body.scrollHeight);
+}
+
+window.addEventListener('DOMContentLoaded', scrollToBottom);
+window.addEventListener('load', () => setTimeout(scrollToBottom, 50));
+
+// Detect live-reload content changes and scroll to bottom.
+new MutationObserver(scrollToBottom).observe(document.documentElement, {
+    childList: true, subtree: true
+});

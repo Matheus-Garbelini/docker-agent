@@ -171,6 +171,14 @@ var (
 	SelectedUserMessageStyle = UserMessageStyle.
 					BorderStyle(lipgloss.ThickBorder()).
 					BorderForeground(Success)
+
+	SystemPromptStyle = BaseMessageStyle.
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(BorderMuted)
+
+	SystemPromptHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(TextMuted)
 )
 
 // Dialog Styles

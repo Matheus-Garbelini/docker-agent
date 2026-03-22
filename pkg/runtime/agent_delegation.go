@@ -259,7 +259,7 @@ func (r *LocalRuntime) handleTaskTransfer(ctx context.Context, sess *session.Ses
 		evts <- AgentSwitching(false, params.Agent, a.Name())
 
 		// Restore original agent info in sidebar
-		evts <- AgentInfo(a.Name(), getAgentModelID(a), a.Description(), a.WelcomeMessage())
+		evts <- AgentInfo(a.Name(), getAgentModelID(a), a.Description(), a.WelcomeMessage(), a.Instruction())
 	}()
 
 	// Emit agent info for the new agent
@@ -267,7 +267,7 @@ func (r *LocalRuntime) handleTaskTransfer(ctx context.Context, sess *session.Ses
 	if err != nil {
 		return nil, err
 	}
-	evts <- AgentInfo(child.Name(), getAgentModelID(child), child.Description(), child.WelcomeMessage())
+	evts <- AgentInfo(child.Name(), getAgentModelID(child), child.Description(), child.WelcomeMessage(), child.Instruction())
 
 	slog.Debug("Creating new session with parent session", "parent_session_id", sess.ID, "tools_approved", sess.ToolsApproved)
 

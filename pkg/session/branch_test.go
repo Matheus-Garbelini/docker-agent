@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/docker/docker-agent/pkg/chat"
 )
 
 func TestGenerateBranchTitle(t *testing.T) {
@@ -87,6 +89,14 @@ func TestCloneSessionItem(t *testing.T) {
 		cloned, err := cloneSessionItem(item)
 		require.NoError(t, err)
 		assert.Equal(t, "test summary", cloned.Summary)
+	})
+
+	t.Run("compaction item clones successfully", func(t *testing.T) {
+		item := NewCompactionItem([]chat.Message{{Role: chat.MessageRoleUser, Content: "compact"}}, 0)
+		cloned, err := cloneSessionItem(item)
+		require.NoError(t, err)
+		require.Len(t, cloned.CompactionMessages, 1)
+		assert.Equal(t, "compact", cloned.CompactionMessages[0].Content)
 	})
 }
 

@@ -90,7 +90,8 @@ func NewSemanticEmbeddingsFromConfig(ctx context.Context, cfg latest.RAGStrategy
 	}
 
 	chatProvider, err := provider.New(ctx, &chatModelCfg, buildCtx.Env,
-		options.WithGateway(buildCtx.ModelsGateway))
+		options.WithGateway(buildCtx.ModelsGateway),
+		options.WithProviders(buildCtx.Providers))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chat model provider: %w", err)
 	}

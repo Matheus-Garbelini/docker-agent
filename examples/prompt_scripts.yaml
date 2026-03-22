@@ -1,0 +1,23 @@
+# Prompt Scripts Example
+#
+# Demonstrates `add_prompt_scripts`, which runs executable commands at session
+# start and appends their stdout to the system prompt.
+#
+# Usage:
+#   docker-agent run examples/prompt_scripts.yaml
+#
+# Each entry is a shell command string (program + arguments).
+# Scripts run in the working directory with a 30-second timeout.
+
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Assistant with dynamic prompt context
+    instruction: |
+      You are a helpful assistant. Use the additional context injected
+      by the prompt scripts to give accurate, context-aware answers.
+    add_prompt_scripts:
+      - "date +%A"                        # inject the current day name
+      - "python3 -c 'import sys; print(sys.version)'"  # inject Python version
+    toolsets:
+      - type: think

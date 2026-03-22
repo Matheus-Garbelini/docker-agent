@@ -2,6 +2,7 @@ package latest
 
 import (
 	"errors"
+	"fmt"
 )
 
 func (t *Config) UnmarshalYAML(unmarshal func(any) error) error {
@@ -20,6 +21,10 @@ func (t *Config) validate() error {
 
 		// Validate fallback config
 		if err := agent.validateFallback(); err != nil {
+			return err
+		}
+
+		if err := agent.validateCompaction(); err != nil {
 			return err
 		}
 
@@ -50,6 +55,65 @@ func (a *AgentConfig) validateFallback() error {
 	}
 	if a.Fallback.Cooldown.Duration < 0 {
 		return errors.New("fallback.cooldown must be non-negative")
+	}
+
+	return nil
+}
+
+// validateCompaction validates the compaction configuration for an agent.
+func (a *AgentConfig) validateCompaction() error {
+	c := a.Compaction
+	if c == nil {
+		return nil
+	}
+
+	if c.MaxOldToolCallTokens < -1 {
+		return errors.New("compaction.max_old_tool_call_tokens must be >= -1")
+	}
+
+	switch c.EffectiveType() {
+	case CompactionTypeSummary:
+		if c.Script != "" {
+			return errors.New("compaction.script can only be used with type 'custom'")
+		}
+		if c.Agent != "" {
+			return errors.New("compaction.agent can only be used with type 'agent'")
+		}
+		if c.Threshold.Kind == ThresholdMessages {
+			return errors.New("message-based threshold (e.g. '14m') can only be used with type 'rolling'")
+		}
+	case CompactionTypeCustom:
+		if c.Script == "" {
+			return errors.New("compaction.script is required for type 'custom'")
+		}
+		if c.Agent != "" {
+			return errors.New("compaction.agent can only be used with type 'agent'")
+		}
+		if c.Threshold.Kind == ThresholdMessages {
+			return errors.New("message-based threshold (e.g. '14m') can only be used with type 'rolling'")
+		}
+	case CompactionTypeRolling:
+		if c.Script != "" {
+			return errors.New("compaction.script can only be used with type 'custom'")
+		}
+		if c.Agent != "" {
+			return errors.New("compaction.agent can only be used with type 'agent'")
+		}
+		if c.Model != "" {
+			return errors.New("compaction.model is not applicable for type 'rolling'")
+		}
+	case CompactionTypeAgent:
+		if c.Agent == "" {
+			return errors.New("compaction.agent is required for type 'agent'")
+		}
+		if c.Script != "" {
+			return errors.New("compaction.script can only be used with type 'custom'")
+		}
+		if c.Threshold.Kind == ThresholdMessages {
+			return errors.New("message-based threshold (e.g. '14m') can only be used with type 'rolling'")
+		}
+	default:
+		return fmt.Errorf("compaction.type must be one of: summary, custom, rolling, agent (got %q)", c.Type)
 	}
 
 	return nil

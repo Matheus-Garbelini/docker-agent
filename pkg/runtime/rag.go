@@ -33,6 +33,15 @@ func (r *LocalRuntime) forwardRAGEvents(ctx context.Context, ragManagers []*rag.
 	for _, mgr := range ragManagers {
 		go func() {
 			ragName := mgr.Name()
+			// Recover from send-on-closed-channel panics. The events
+			// channel may be closed by finalizeEventChannel while this
+			// goroutine is still running; recover gracefully instead of
+			// crashing the process.
+			defer func() {
+				if p := recover(); p != nil {
+					slog.Debug("RAG event forwarder recovered from panic", "rag", ragName, "panic", p)
+				}
+			}()
 			slog.Debug("Starting RAG event forwarder goroutine", "rag", ragName)
 			for {
 				select {

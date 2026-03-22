@@ -32,6 +32,7 @@ type messageModel struct {
 	height   int
 	focused  bool
 	selected bool
+	expanded bool // for collapsible message types (e.g., system prompt)
 	spinner  spinner.Spinner
 }
 
@@ -169,6 +170,8 @@ func (mv *messageModel) Render(width int) string {
 			description = ansi.Truncate(description, maxDescWidth, "…")
 		}
 		return spinnerView + " " + styles.MutedStyle.Render(description)
+	case types.MessageTypeSystemPrompt:
+		return mv.renderSystemPrompt(width)
 	default:
 		return msg.Content
 	}
@@ -269,4 +272,54 @@ func preserveIndentation(line string) string {
 		return line
 	}
 	return strings.Repeat("\u00A0", leadingSpaces) + line[leadingSpaces:]
+}
+
+const systemPromptPreviewLines = 3
+
+// renderSystemPrompt renders the system prompt as a collapsible block.
+func (mv *messageModel) renderSystemPrompt(width int) string {
+	messageStyle := styles.SystemPromptStyle
+	innerWidth := width - messageStyle.GetHorizontalFrameSize()
+
+	if mv.expanded {
+		content := preserveLineBreaks(mv.message.Content)
+		rendered, err := markdown.NewRenderer(innerWidth).Render(content)
+		if err != nil {
+			rendered = mv.message.Content
+		}
+		header := styles.SystemPromptHeaderStyle.Render("▾ System Prompt")
+		return messageStyle.Width(width - 1).Render(header + "\n" + strings.TrimRight(rendered, "\n\r\t "))
+	}
+
+	// Collapsed: show header + first few lines as preview
+	lines := strings.Split(mv.message.Content, "\n")
+	preview := lines
+	hasMore := false
+	if len(lines) > systemPromptPreviewLines {
+		preview = lines[:systemPromptPreviewLines]
+		hasMore = true
+	}
+	previewText := strings.Join(preview, "\n")
+	if hasMore {
+		previewText += "\n…"
+	}
+
+	header := styles.SystemPromptHeaderStyle.Render("▸ System Prompt")
+	previewRendered := styles.MutedStyle.Render(ansi.Truncate(previewText, innerWidth*4, "…"))
+	return messageStyle.Width(width - 1).Render(header + "\n" + previewRendered)
+}
+
+// Toggle toggles the expanded/collapsed state for collapsible message types.
+func (mv *messageModel) Toggle() {
+	mv.expanded = !mv.expanded
+}
+
+// IsToggleLine returns true if the given line (0-based, relative to this view) is the toggle header.
+func (mv *messageModel) IsToggleLine(line int) bool {
+	if mv.message.Type != types.MessageTypeSystemPrompt {
+		return false
+	}
+	// The header is on the first content line, after top border + top padding.
+	headerLine := styles.SystemPromptStyle.GetBorderTopSize() + styles.SystemPromptStyle.GetPaddingTop()
+	return line <= headerLine
 }

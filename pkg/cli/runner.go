@@ -14,6 +14,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 
+	"github.com/docker/docker-agent/pkg/app/export"
 	"github.com/docker/docker-agent/pkg/chat"
 	"github.com/docker/docker-agent/pkg/input"
 	"github.com/docker/docker-agent/pkg/runtime"
@@ -74,6 +75,7 @@ type Config struct {
 	AutoApprove    bool
 	HideToolCalls  bool
 	OutputJSON     bool
+	ExportPath     string
 }
 
 // Run executes an agent in non-TUI mode, handling user input and runtime events.
@@ -94,6 +96,32 @@ func Run(ctx context.Context, out *Printer, cfg Config, rt runtime.Runtime, sess
 	// If the last received event was an error, return it. That way the exit code
 	// will be non-zero if the agent failed.
 	var lastErr error
+
+	// Auto-export: export session as HTML after each conversation turn.
+	exportPath := cfg.ExportPath
+	if exportPath == "true" {
+		exportPath = "" // empty means auto-generate filename
+	}
+	autoExportEnabled := cfg.ExportPath != ""
+	var cachedSystemPrompt string
+	autoExport := func() {
+		if !autoExportEnabled {
+			return
+		}
+		agentInfo := rt.CurrentAgentInfo(ctx)
+		systemPrompt := cachedSystemPrompt
+		if systemPrompt == "" {
+			systemPrompt = agentInfo.Instruction
+		}
+		exportFile, err := export.SessionToFile(sess, agentInfo.Description, systemPrompt, exportPath)
+		if err != nil {
+			slog.Error("Auto-export failed", "error", err)
+			return
+		}
+		// Pin the resolved path so subsequent exports overwrite the same file.
+		exportPath = exportFile
+		slog.Debug("Auto-exported session", "file", exportFile)
+	}
 
 	oneLoop := func(text string, rd io.Reader) error {
 		autoExtensions := 0
@@ -150,6 +178,8 @@ func Run(ctx context.Context, out *Printer, cfg Config, rt runtime.Runtime, sess
 				lastAgent = agentName
 			}
 			switch e := event.(type) {
+			case *runtime.AgentInfoEvent:
+				cachedSystemPrompt = e.Instruction
 			case *runtime.AgentChoiceEvent:
 				out.Print(e.Content)
 			case *runtime.AgentChoiceReasoningEvent:
@@ -262,12 +292,14 @@ func Run(ctx context.Context, out *Printer, cfg Config, rt runtime.Runtime, sess
 		if err := oneLoop(string(buf), os.Stdin); err != nil {
 			return err
 		}
+		autoExport()
 	case len(userMessages) > 0:
 		// One or more messages: multi-turn conversation
 		for _, msg := range userMessages {
 			if err := oneLoop(msg, os.Stdin); err != nil {
 				return err
 			}
+			autoExport()
 		}
 	case !isatty.IsTerminal(os.Stdin.Fd()):
 		// Stdin is not a terminal: read all input from stdin
@@ -299,6 +331,7 @@ func Run(ctx context.Context, out *Printer, cfg Config, rt runtime.Runtime, sess
 			if err := oneLoop(line, os.Stdin); err != nil {
 				return err
 			}
+			autoExport()
 		}
 	}
 

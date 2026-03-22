@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"reflect"
+	goruntime "runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -281,7 +284,7 @@ func TestSimple(t *testing.T) {
 		UserMessage("Hi", sess.ID, nil, 0),
 		StreamStarted(sess.ID, "root"),
 		ToolsetInfo(0, false, "root"),
-		AgentInfo("root", "test/mock-model", "", ""),
+		AgentInfo("root", "test/mock-model", "", "", "You are a test agent"),
 		AgentChoice("root", sess.ID, "Hello"),
 		MessageAdded(sess.ID, msgAdded.Message, "root"),
 		NewTokenUsageEvent(sess.ID, "root", &Usage{InputTokens: 3, OutputTokens: 2, ContextLength: 5, LastMessage: &MessageUsage{
@@ -320,7 +323,7 @@ func TestMultipleContentChunks(t *testing.T) {
 		UserMessage("Please greet me", sess.ID, nil, 0),
 		StreamStarted(sess.ID, "root"),
 		ToolsetInfo(0, false, "root"),
-		AgentInfo("root", "test/mock-model", "", ""),
+		AgentInfo("root", "test/mock-model", "", "", "You are a test agent"),
 		AgentChoice("root", sess.ID, "Hello "),
 		AgentChoice("root", sess.ID, "there, "),
 		AgentChoice("root", sess.ID, "how "),
@@ -361,7 +364,7 @@ func TestWithReasoning(t *testing.T) {
 		UserMessage("Hi", sess.ID, nil, 0),
 		StreamStarted(sess.ID, "root"),
 		ToolsetInfo(0, false, "root"),
-		AgentInfo("root", "test/mock-model", "", ""),
+		AgentInfo("root", "test/mock-model", "", "", "You are a test agent"),
 		AgentChoiceReasoning("root", sess.ID, "Let me think about this..."),
 		AgentChoiceReasoning("root", sess.ID, " I should respond politely."),
 		AgentChoice("root", sess.ID, "Hello, how can I help you?"),
@@ -401,7 +404,7 @@ func TestMixedContentAndReasoning(t *testing.T) {
 		UserMessage("Hi there", sess.ID, nil, 0),
 		StreamStarted(sess.ID, "root"),
 		ToolsetInfo(0, false, "root"),
-		AgentInfo("root", "test/mock-model", "", ""),
+		AgentInfo("root", "test/mock-model", "", "", "You are a test agent"),
 		AgentChoiceReasoning("root", sess.ID, "The user wants a greeting"),
 		AgentChoice("root", sess.ID, "Hello!"),
 		AgentChoiceReasoning("root", sess.ID, " I should be friendly"),
@@ -868,6 +871,94 @@ func TestSummarize_EmptySession(t *testing.T) {
 	require.Contains(t, warningMsg, "empty", "warning message should mention empty session")
 }
 
+func shellPrintfCommand(output string) string {
+	if goruntime.GOOS == "windows" {
+		escaped := strings.ReplaceAll(output, "'", "''")
+		return "Write-Output -NoNewline '" + escaped + "'"
+	}
+	escaped := strings.ReplaceAll(output, "'", `'"'"'`)
+	return "printf '%s' '" + escaped + "'"
+}
+
+func TestSummarize_CompactionScriptSuccess(t *testing.T) {
+	compactedJSON := `[{"role":"user","content":"kept by script"}]`
+	prov := &mockProvider{id: "test/mock-model", stream: &mockStream{}}
+	root := agent.New("root", "You are a test agent",
+		agent.WithModel(prov),
+		agent.WithCompaction(&latest.CompactionConfig{Type: latest.CompactionTypeCustom, Script: shellPrintfCommand(compactedJSON)}),
+	)
+	tm := team.New(team.WithAgents(root))
+
+	rt, err := NewLocalRuntime(tm, WithSessionCompaction(false), WithModelStore(mockModelStore{}), WithEnv(os.Environ()))
+	require.NoError(t, err)
+
+	sess := session.New()
+	sess.AddMessage(session.UserMessage("original user"))
+	sess.AddMessage(session.NewAgentMessage("root", &chat.Message{Role: chat.MessageRoleAssistant, Content: "original assistant"}))
+
+	events := make(chan Event, 10)
+	rt.Summarize(t.Context(), sess, "", events)
+	close(events)
+
+	require.Len(t, sess.Messages, 3)
+	assert.True(t, sess.Messages[2].IsCompaction())
+	require.Len(t, sess.Messages[2].CompactionMessages, 1)
+	assert.Equal(t, "kept by script", sess.Messages[2].CompactionMessages[0].Content)
+	assert.Positive(t, sess.InputTokens)
+	assert.Zero(t, sess.OutputTokens)
+
+	messages := sess.GetMessages(root)
+	var conversation []chat.Message
+	for _, msg := range messages {
+		if msg.Role != chat.MessageRoleSystem {
+			conversation = append(conversation, msg)
+		}
+	}
+	require.Len(t, conversation, 1)
+	assert.Equal(t, "kept by script", conversation[0].Content)
+
+	var summaryEvent *SessionSummaryEvent
+	for ev := range events {
+		if event, ok := ev.(*SessionSummaryEvent); ok {
+			summaryEvent = event
+		}
+	}
+	require.NotNil(t, summaryEvent)
+	require.NotNil(t, summaryEvent.CompactionMessages)
+	require.Len(t, summaryEvent.CompactionMessages, 1)
+}
+
+func TestSummarize_CompactionScriptFallbacksToBuiltin(t *testing.T) {
+	summaryStream := newStreamBuilder().AddContent("built in summary").AddStopWithUsage(10, 5).Build()
+	prov := &queueProvider{id: "test/mock-model", streams: []chat.MessageStream{summaryStream}}
+	root := agent.New("root", "You are a test agent",
+		agent.WithModel(prov),
+		agent.WithCompaction(&latest.CompactionConfig{Type: latest.CompactionTypeCustom, Script: shellPrintfCommand("not-json")}),
+	)
+	tm := team.New(team.WithAgents(root))
+
+	rt, err := NewLocalRuntime(tm, WithSessionCompaction(false), WithModelStore(mockModelStore{}), WithEnv(os.Environ()))
+	require.NoError(t, err)
+
+	sess := session.New()
+	sess.AddMessage(session.UserMessage("original user"))
+
+	events := make(chan Event, 10)
+	rt.Summarize(t.Context(), sess, "", events)
+	close(events)
+
+	require.Len(t, sess.Messages, 2)
+	assert.Equal(t, "built in summary", sess.Messages[1].Summary)
+
+	var warningFound bool
+	for ev := range events {
+		if warningEvent, ok := ev.(*WarningEvent); ok && strings.Contains(warningEvent.Message, "falling back") {
+			warningFound = true
+		}
+	}
+	assert.True(t, warningFound)
+}
+
 func TestProcessToolCalls_UnknownTool_ReturnsErrorResponse(t *testing.T) {
 	root := agent.New("root", "You are a test agent", agent.WithModel(&mockProvider{}))
 	tm := team.New(team.WithAgents(root))
@@ -933,7 +1024,7 @@ func TestEmitStartupInfo(t *testing.T) {
 
 	// Verify expected events are emitted
 	expectedEvents := []Event{
-		AgentInfo("startup-test-agent", "test/startup-model", "This is a startup test agent", "Welcome!"),
+		AgentInfo("startup-test-agent", "test/startup-model", "This is a startup test agent", "Welcome!", "You are a startup test agent"),
 		TeamInfo([]AgentDetails{
 			{Name: "startup-test-agent", Description: "This is a startup test agent", Provider: "test", Model: "startup-model"},
 			{Name: "other-agent", Description: "This is another agent", Provider: "test", Model: "startup-model"},

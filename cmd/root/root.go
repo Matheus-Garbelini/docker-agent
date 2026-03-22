@@ -144,6 +144,8 @@ We collect anonymous usage data to help improve docker agent. To disable:
 	cmd.PersistentFlags().StringVar(&flags.cacheDir, "cache-dir", "", "Override the cache directory (default: ~/Library/Caches/cagent on macOS)")
 	cmd.PersistentFlags().StringVar(&flags.configDir, "config-dir", "", "Override the config directory (default: ~/.config/cagent)")
 	cmd.PersistentFlags().StringVar(&flags.dataDir, "data-dir", "", "Override the data directory (default: ~/.cagent)")
+	cmd.PersistentFlags().String("export", "", "Auto-export session as HTML after each conversation turn (optionally specify output filename)")
+	cmd.PersistentFlags().Lookup("export").NoOptDefVal = "true"
 
 	// Define groups
 	cmd.AddGroup(
@@ -160,6 +162,7 @@ We collect anonymous usage data to help improve docker agent. To disable:
 		newDebugCmd(),
 		newAliasCmd(),
 		newServeCmd(),
+		newRAGCmd(),
 	)
 
 	return cmd

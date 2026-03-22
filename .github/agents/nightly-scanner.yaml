@@ -1,27 +1,27 @@
 models:
   # Orchestrator - needs good reasoning for delegation
   claude-sonnet:
-    provider: anthropic
-    model: claude-sonnet-4-5
+    provider: openrouter
+    model: anthropic/claude-sonnet-4-6
     max_tokens: 4096
     temperature: 0.1
 
   # Security analysis - reasoning model excels at finding subtle vulnerabilities
   openai-o3:
-    provider: openai
-    model: o3-mini
+    provider: openrouter
+    model: openai/o3-mini
     max_tokens: 8192
 
   # Bug detection - fast and surprisingly good at Go code analysis
   gemini-flash:
-    provider: google
-    model: gemini-2.5-flash
+    provider: openrouter
+    model: google/gemini-3-flash-preview
     max_tokens: 8192
 
   # Documentation & reporting - faster model is sufficient
   claude-haiku:
-    provider: anthropic
-    model: claude-haiku-4-5
+    provider: openrouter
+    model: anthropic/claude-haiku-4-5
     max_tokens: 4096
     temperature: 0.2
 

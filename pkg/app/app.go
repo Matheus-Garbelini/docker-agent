@@ -47,6 +47,9 @@ type App struct {
 	cancel                 context.CancelFunc
 	currentAgentModel      string                  // Tracks the current agent's model ID from AgentInfoEvent
 	exitAfterFirstResponse bool                    // Exit TUI after first assistant response completes
+	autoExportEnabled      bool                    // Whether to auto-export session after each conversation turn
+	autoExportPath         string                  // Output path for auto-export (empty = auto-generate)
+	systemPrompt           string                  // Full assembled system prompt for display/export
 	titleGenerating        atomic.Bool             // True when title generation is in progress
 	titleGen               *sessiontitle.Generator // Title generator for local runtime (nil for remote)
 }
@@ -81,6 +84,15 @@ func WithExitAfterFirstResponse() Opt {
 func WithQueuedMessages(msgs []string) Opt {
 	return func(a *App) {
 		a.queuedMessages = msgs
+	}
+}
+
+// WithAutoExport configures the app to automatically export the session as HTML
+// after each conversation turn. If filename is empty, a default name is generated.
+func WithAutoExport(filename string) Opt {
+	return func(a *App) {
+		a.autoExportEnabled = true
+		a.autoExportPath = filename
 	}
 }
 
@@ -1042,7 +1054,40 @@ func (a *App) mergeEvents(events []tea.Msg) []tea.Msg {
 // If filename is empty, a default name based on the session title and timestamp is used.
 func (a *App) ExportHTML(ctx context.Context, filename string) (string, error) {
 	agentInfo := a.runtime.CurrentAgentInfo(ctx)
-	return export.SessionToFile(a.session, agentInfo.Description, filename)
+	systemPrompt := a.SystemPrompt()
+	return export.SessionToFile(a.session, agentInfo.Description, systemPrompt, filename)
+}
+
+// SystemPrompt returns the full assembled system prompt for the current agent,
+// including content from add_prompt_files and add_prompt_scripts.
+func (a *App) SystemPrompt() string {
+	return a.systemPrompt
+}
+
+// SetSystemPrompt stores the full system prompt for display and export.
+func (a *App) SetSystemPrompt(prompt string) {
+	a.systemPrompt = prompt
+}
+
+// AutoExportEnabled returns whether auto-export is configured.
+func (a *App) AutoExportEnabled() bool {
+	return a.autoExportEnabled
+}
+
+// RunAutoExport exports the session if auto-export is enabled.
+// It silently logs errors rather than failing, since this is a background operation.
+func (a *App) RunAutoExport(ctx context.Context) {
+	if !a.autoExportEnabled {
+		return
+	}
+	exportFile, err := a.ExportHTML(ctx, a.autoExportPath)
+	if err != nil {
+		slog.Error("Auto-export failed", "error", err)
+		return
+	}
+	// Update the path so subsequent exports overwrite the same file.
+	a.autoExportPath = exportFile
+	slog.Debug("Auto-exported session", "file", exportFile)
 }
 
 // ErrTitleGenerating is returned when attempting to set a title while generation is in progress.

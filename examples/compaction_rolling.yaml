@@ -1,0 +1,8 @@
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Demonstrates rolling compaction that keeps only recent messages.
+    instruction: You are a helpful assistant.
+    compaction:
+      type: rolling
+      threshold: "14m"

@@ -219,6 +219,42 @@ func TestGetMessages_CacheControlWithSummary(t *testing.T) {
 	assert.Contains(t, messages[checkpointIndices[1]].Content, "Today's date", "checkpoint #2 should be on date message")
 }
 
+func TestGetMessages_CompactionMessagesReplaceOlderHistory(t *testing.T) {
+	testAgent := agent.New("root", "instructions")
+
+	s := New()
+	s.AddMessage(NewAgentMessage("", &chat.Message{Role: chat.MessageRoleUser, Content: "old user"}))
+	s.AddMessage(NewAgentMessage("", &chat.Message{Role: chat.MessageRoleAssistant, Content: "old assistant"}))
+	s.Messages = append(s.Messages, NewCompactionItem([]chat.Message{
+		{Role: chat.MessageRoleUser, Content: "compacted user"},
+		{
+			Role:    chat.MessageRoleAssistant,
+			Content: "compacted assistant",
+			ToolCalls: []tools.ToolCall{{
+				ID:       "compacted-tool",
+				Function: tools.FunctionCall{Name: "shell", Arguments: `{"cmd":"echo ok"}`},
+			}},
+		},
+		{Role: chat.MessageRoleTool, Content: "compacted tool result", ToolCallID: "compacted-tool"},
+	}, 0))
+	s.AddMessage(NewAgentMessage("", &chat.Message{Role: chat.MessageRoleUser, Content: "new user"}))
+
+	messages := s.GetMessages(testAgent)
+
+	var conversation []chat.Message
+	for _, msg := range messages {
+		if msg.Role != chat.MessageRoleSystem {
+			conversation = append(conversation, msg)
+		}
+	}
+
+	require.Len(t, conversation, 4)
+	assert.Equal(t, "compacted user", conversation[0].Content)
+	assert.Equal(t, "compacted assistant", conversation[1].Content)
+	assert.Equal(t, "compacted tool result", conversation[2].Content)
+	assert.Equal(t, "new user", conversation[3].Content)
+}
+
 func TestGetLastUserMessages(t *testing.T) {
 	t.Parallel()
 

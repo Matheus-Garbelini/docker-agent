@@ -50,6 +50,7 @@ type Model interface {
 	AddAssistantMessage() tea.Cmd
 	AddCancelledMessage() tea.Cmd
 	AddWelcomeMessage(content string) tea.Cmd
+	AddSystemPromptMessage(content string) tea.Cmd
 	AddOrUpdateToolCall(agentName string, toolCall tools.ToolCall, toolDef tools.Tool, status types.ToolStatus) tea.Cmd
 	AddToolResult(msg *runtime.ToolCallResponseEvent, status types.ToolStatus) tea.Cmd
 	AppendToLastMessage(agentName, content string) tea.Cmd
@@ -281,6 +282,20 @@ func (m *model) handleMouseClick(msg tea.MouseClickMsg) (layout.Model, tea.Cmd) 
 		if block, ok := m.views[msgIdx].(*reasoningblock.Model); ok {
 			if block.IsToggleLine(localLine) {
 				block.Toggle()
+				m.bottomSlack = 0
+				m.invalidateItem(msgIdx)
+				return m, nil
+			}
+		}
+
+		// Check for collapsible message toggle (e.g., system prompt)
+		type toggleable interface {
+			IsToggleLine(line int) bool
+			Toggle()
+		}
+		if tv, ok := m.views[msgIdx].(toggleable); ok {
+			if tv.IsToggleLine(localLine) {
+				tv.Toggle()
 				m.bottomSlack = 0
 				m.invalidateItem(msgIdx)
 				return m, nil
@@ -1108,10 +1123,35 @@ func (m *model) AddCancelledMessage() tea.Cmd {
 }
 
 func (m *model) AddWelcomeMessage(content string) tea.Cmd {
-	if content == "" || len(m.views) > 0 {
+	if content == "" {
 		return nil
 	}
+	// Only add welcome if no conversation messages exist yet
+	// (system prompt messages don't count as conversation messages)
+	for _, msg := range m.messages {
+		if msg.Type != types.MessageTypeSystemPrompt {
+			return nil
+		}
+	}
 	msg := types.Welcome(content)
+	m.messages = append(m.messages, msg)
+	view := m.createMessageView(msg)
+	m.views = append(m.views, view)
+	m.renderDirty = true
+	return view.Init()
+}
+
+func (m *model) AddSystemPromptMessage(content string) tea.Cmd {
+	if content == "" {
+		return nil
+	}
+	// Only add once
+	for _, msg := range m.messages {
+		if msg.Type == types.MessageTypeSystemPrompt {
+			return nil
+		}
+	}
+	msg := types.SystemPrompt(content)
 	m.messages = append(m.messages, msg)
 	view := m.createMessageView(msg)
 	m.views = append(m.views, view)

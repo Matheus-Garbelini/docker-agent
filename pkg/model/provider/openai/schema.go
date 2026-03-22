@@ -6,17 +6,12 @@ import (
 
 	"github.com/openai/openai-go/v3/shared"
 
-	"github.com/docker/docker-agent/pkg/tools"
+	"github.com/docker/docker-agent/pkg/model/provider/oaistream"
 )
 
 // ConvertParametersToSchema converts parameters to OpenAI Schema format
 func ConvertParametersToSchema(params any) (shared.FunctionParameters, error) {
-	p, err := tools.SchemaToMap(params)
-	if err != nil {
-		return nil, err
-	}
-
-	return fixSchemaArrayItems(removeFormatFields(makeAllRequired(p))), nil
+	return oaistream.ConvertParametersToSchema(params)
 }
 
 // walkSchema calls fn on the given schema node, then recursively walks into

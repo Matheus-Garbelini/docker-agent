@@ -21,6 +21,7 @@ const (
 	MessageTypeToolResult
 	MessageTypeWelcome
 	MessageTypeLoading
+	MessageTypeSystemPrompt
 )
 
 const UserMessageEditLabel = "✎"
@@ -94,6 +95,13 @@ func Cancelled() *Message {
 func Welcome(content string) *Message {
 	return &Message{
 		Type:    MessageTypeWelcome,
+		Content: strings.ReplaceAll(content, "\t", "    "),
+	}
+}
+
+func SystemPrompt(content string) *Message {
+	return &Message{
+		Type:    MessageTypeSystemPrompt,
 		Content: strings.ReplaceAll(content, "\t", "    "),
 	}
 }

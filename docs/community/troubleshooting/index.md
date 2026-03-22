@@ -15,7 +15,7 @@ _Common issues and how to resolve them when working with docker-agent._
 Error message: `context_length_exceeded` or similar.
 
 - Use `/compact` in the TUI to summarize and reduce conversation history
-- Set `num_history_items` in agent config to limit messages sent to the model
+- Configure `compaction` in agent config to control when and how history is compacted (e.g. `type: rolling` with `threshold: "14m"`)
 - Switch to a model with larger context (e.g., Claude 200K, Gemini 2M)
 - Break large tasks into smaller conversations
 
@@ -188,7 +188,7 @@ In API server mode, each client gets isolated sessions. If sessions are mixing u
 ### High memory usage
 
 - Large context windows (64K+ tokens) consume significant memory — consider reducing `max_tokens`
-- Use `num_history_items` in agent config to limit conversation history
+- Configure `compaction` in agent config with `type: rolling` to limit conversation history
 - For DMR (local models), tune `runtime_flags` for your hardware (e.g., `--ngl` for GPU layers)
 
 ### Slow responses

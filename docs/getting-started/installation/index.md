@@ -103,6 +103,7 @@ docker-agent needs API keys for the model providers you want to use. Set them as
 ```bash
 # Pick one (or more) depending on your provider
 export OPENAI_API_KEY="sk-..."           # OpenAI
+export OPENROUTER_API_KEY="sk-or-..."    # OpenRouter
 export ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic
 export GOOGLE_API_KEY="AI..."           # Google Gemini
 export MISTRAL_API_KEY="..."            # Mistral
