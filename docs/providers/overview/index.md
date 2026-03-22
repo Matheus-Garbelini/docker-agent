@@ -16,6 +16,11 @@ _docker-agent supports multiple AI model providers. Choose the right one for you
     <h3>OpenAI</h3>
     <p>GPT-4o, GPT-5, GPT-5-mini. The most widely used AI models.</p>
   </a>
+  <a class="card" href="{{ '/providers/openrouter/' | relative_url }}">
+    <div class="card-icon">🧭</div>
+    <h3>OpenRouter</h3>
+    <p>Route requests across OpenAI, Anthropic, Google, and more through one provider.</p>
+  </a>
   <a class="card" href="{{ '/providers/anthropic/' | relative_url }}">
     <div class="card-icon">🟠</div>
     <h3>Anthropic</h3>
@@ -48,6 +53,7 @@ _docker-agent supports multiple AI model providers. Choose the right one for you
 | Provider            | Key              | Local? | Strengths                                             |
 | ------------------- | ---------------- | ------ | ----------------------------------------------------- |
 | OpenAI              | `openai`         | No     | Broad model selection, tool calling, multimodal       |
+| OpenRouter          | `openrouter`     | No     | Unified routing, provider fallback, chat + embeddings |
 | Anthropic           | `anthropic`      | No     | Strong coding, extended thinking, large context       |
 | Google              | `google`         | No     | Fast inference, competitive pricing, multimodal       |
 | AWS Bedrock         | `amazon-bedrock` | No     | Enterprise features, multiple models, AWS integration |

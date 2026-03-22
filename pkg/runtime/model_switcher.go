@@ -355,6 +355,7 @@ func (r *LocalRuntime) getAvailableProviders(ctx context.Context) map[string]boo
 			available["google"] = true
 			available["mistral"] = true
 			available["xai"] = true
+			available["openrouter"] = true
 		}
 		return available
 	}
@@ -379,7 +380,9 @@ func (r *LocalRuntime) getAvailableProviders(ctx context.Context) map[string]boo
 	if key, _ := env.Get(ctx, "GOOGLE_API_KEY"); key != "" {
 		available["google"] = true
 	}
-
+	if key, _ := env.Get(ctx, "OPENROUTER_API_KEY"); key != "" {
+		available["openrouter"] = true
+	}
 	// DMR and ollama don't require credentials (local models)
 	available["dmr"] = true
 	available["ollama"] = true

@@ -1,0 +1,9 @@
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Demonstrates custom session compaction.
+    instruction: You are a helpful assistant.
+    compaction:
+      type: custom
+      threshold: 180000
+      script: python3 examples/compaction_script.py

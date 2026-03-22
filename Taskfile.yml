@@ -24,7 +24,23 @@ tasks:
     desc: Build the application binary
     cmds:
       - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.CLI_PLUGIN_BINARY_NAME}} {{.MAIN_PKG}}
-      - '{{if ne .CI "true"}}ln -sf {{.USER_WORKING_DIR}}/{{.BUILD_DIR}}/{{.CLI_PLUGIN_BINARY_NAME}} {{.HOME}}/bin/{{.CLI_PLUGIN_BINARY_NAME}}{{end}}'
+      - '{{if ne .CI "true"}}ln -sf {{.USER_WORKING_DIR}}/{{.BUILD_DIR}}/{{.CLI_PLUGIN_BINARY_NAME}} {{.HOME}}/go/bin/{{.CLI_PLUGIN_BINARY_NAME}}{{end}}'
+    sources:
+      - "{{.GO_SOURCES}}"
+      - "**/*.template"
+      - "**/*.txt"
+      - "**/*.y{a,}ml"
+      - "go.mod"
+      - "go.sum"
+    generates:
+      - "{{.BUILD_DIR}}/{{.CLI_PLUGIN_BINARY_NAME}}"
+
+  build-all:
+    aliases: [ba]
+    desc: Build the application binary
+    cmds:
+      - go build -a -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.CLI_PLUGIN_BINARY_NAME}} {{.MAIN_PKG}}
+      - '{{if ne .CI "true"}}ln -sf {{.USER_WORKING_DIR}}/{{.BUILD_DIR}}/{{.CLI_PLUGIN_BINARY_NAME}} {{.HOME}}/go/bin/{{.CLI_PLUGIN_BINARY_NAME}}{{end}}'
     sources:
       - "{{.GO_SOURCES}}"
       - "**/*.template"
@@ -131,6 +147,30 @@ tasks:
         --exclude 'console.x.ai' \
         --rate-limit 20 \
         http://docs-linkcheck:4000/
+
+  docs-llm-full:
+    desc: Generate docs/llm-full.txt from the docs markdown sources
+    cmd: |
+      set -eu
+      output="{{.TASKFILE_DIR}}/docs/llm-full.txt"
+      strip_front_matter() {
+        awk 'NR == 1 && $0 == "---" { in_fm = 1; next } in_fm && $0 == "---" { in_fm = 0; next } !in_fm { print }' "$1"
+      }
+
+      {
+        printf '# docker-agent documentation\n\n'
+        printf 'Generated from markdown sources in nav order.\n\n'
+        printf '===== docs/index.md =====\n\n'
+        strip_front_matter "{{.TASKFILE_DIR}}/docs/index.md"
+
+        rg '^\s*url:' "{{.TASKFILE_DIR}}/docs/_data/nav.yml" | sed 's/^\s*url:\s*//' | while read -r url; do
+          file="{{.TASKFILE_DIR}}/docs${url}index.md"
+          printf '\n\n===== %s =====\n\n' "${file#{{.TASKFILE_DIR}}/}"
+          strip_front_matter "$file"
+        done
+      } > "$output"
+
+      printf 'Generated %s\n' "$output"
 
   record-demo:
     desc: Record demo gif

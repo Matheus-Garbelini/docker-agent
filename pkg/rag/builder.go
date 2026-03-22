@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker-agent/pkg/config/latest"
 	"github.com/docker/docker-agent/pkg/environment"
 	"github.com/docker/docker-agent/pkg/model/provider"
+	"github.com/docker/docker-agent/pkg/model/provider/options"
 	"github.com/docker/docker-agent/pkg/rag/rerank"
 	"github.com/docker/docker-agent/pkg/rag/strategy"
 	"github.com/docker/docker-agent/pkg/rag/types"
@@ -21,7 +22,8 @@ type ManagersBuildConfig struct {
 	ParentDir     string
 	ModelsGateway string
 	Env           environment.Provider
-	Models        map[string]latest.ModelConfig // Model configurations from config
+	Models        map[string]latest.ModelConfig    // Model configurations from config
+	Providers     map[string]latest.ProviderConfig // Custom provider configurations
 }
 
 // NewManagers constructs all RAG managers defined in the config.
@@ -44,6 +46,7 @@ func NewManagers(ctx context.Context, cfg *latest.Config, buildCfg ManagersBuild
 			ParentDir:     buildCfg.ParentDir,
 			SharedDocs:    GetAbsolutePaths(buildCfg.ParentDir, ragCfg.Docs),
 			Models:        buildCfg.Models,
+			Providers:     buildCfg.Providers,
 			Env:           buildCfg.Env,
 			ModelsGateway: buildCfg.ModelsGateway,
 			RespectVCS:    ragCfg.GetRespectVCS(),
@@ -161,7 +164,8 @@ func buildRerankingConfig(
 		"model", modelCfg.Model)
 
 	// Create provider for reranking model
-	rerankProvider, err := provider.New(ctx, modelCfg, buildCfg.Env)
+	rerankProvider, err := provider.New(ctx, modelCfg, buildCfg.Env,
+		options.WithProviders(buildCfg.Providers))
 	if err != nil {
 		slog.Error("Failed to create reranking provider",
 			"provider", modelCfg.Provider,

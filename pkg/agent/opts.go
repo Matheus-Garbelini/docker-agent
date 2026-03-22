@@ -121,6 +121,12 @@ func WithAddPromptFiles(addPromptFiles []string) Opt {
 	}
 }
 
+func WithAddPromptScripts(addPromptScripts []string) Opt {
+	return func(a *Agent) {
+		a.addPromptScripts = addPromptScripts
+	}
+}
+
 func WithMaxIterations(maxIterations int) Opt {
 	return func(a *Agent) {
 		a.maxIterations = maxIterations
@@ -143,13 +149,16 @@ func WithMaxConsecutiveToolCalls(n int) Opt {
 // Set to 0 to use the default (40000).
 func WithMaxOldToolCallTokens(n int) Opt {
 	return func(a *Agent) {
-		a.maxOldToolCallTokens = n
+		if a.compaction == nil {
+			a.compaction = &latest.CompactionConfig{}
+		}
+		a.compaction.MaxOldToolCallTokens = n
 	}
 }
 
-func WithNumHistoryItems(numHistoryItems int) Opt {
+func WithCompaction(cfg *latest.CompactionConfig) Opt {
 	return func(a *Agent) {
-		a.numHistoryItems = numHistoryItems
+		a.compaction = cfg
 	}
 }
 

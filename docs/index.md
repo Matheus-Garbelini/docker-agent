@@ -108,7 +108,7 @@ docker agent run --exec agent.yaml "Explain the code in main.go"
   <a class="card" href="{{ '/providers/overview/' | relative_url }}">
     <div class="card-icon">🧠</div>
     <h3>Model Providers</h3>
-    <p>OpenAI, Anthropic, Gemini, AWS Bedrock, Docker Model Runner, and custom providers.</p>
+    <p>OpenAI, OpenRouter, Anthropic, Gemini, AWS Bedrock, Docker Model Runner, and custom providers.</p>
   </a>
   <a class="card" href="{{ '/community/contributing/' | relative_url }}">
     <div class="card-icon">🤝</div>

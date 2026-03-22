@@ -34,9 +34,9 @@ type Agent struct {
 	addDescriptionParameter bool
 	maxIterations           int
 	maxConsecutiveToolCalls int
-	maxOldToolCallTokens    int
-	numHistoryItems         int
+	compaction              *latest.CompactionConfig
 	addPromptFiles          []string
+	addPromptScripts        []string
 	tools                   []tools.Tool
 	commands                types.Commands
 	pendingWarnings         []string
@@ -83,15 +83,23 @@ func (a *Agent) MaxConsecutiveToolCalls() int {
 }
 
 func (a *Agent) MaxOldToolCallTokens() int {
-	return a.maxOldToolCallTokens
+	if a.compaction == nil {
+		return 0
+	}
+	return a.compaction.MaxOldToolCallTokens
 }
 
-func (a *Agent) NumHistoryItems() int {
-	return a.numHistoryItems
+// CompactionConfig returns the agent's compaction configuration, or nil if not set.
+func (a *Agent) CompactionConfig() *latest.CompactionConfig {
+	return a.compaction
 }
 
 func (a *Agent) AddPromptFiles() []string {
 	return a.addPromptFiles
+}
+
+func (a *Agent) AddPromptScripts() []string {
+	return a.addPromptScripts
 }
 
 // Description returns the agent's description

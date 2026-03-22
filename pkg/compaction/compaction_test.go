@@ -165,6 +165,65 @@ func TestShouldCompact(t *testing.T) {
 	}
 }
 
+func TestShouldCompactWithThreshold(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		input        int64
+		output       int64
+		added        int64
+		contextLimit int64
+		threshold    int64
+		want         bool
+	}{
+		{
+			name:         "absolute threshold below estimate",
+			input:        300,
+			output:       200,
+			added:        50,
+			contextLimit: 100000,
+			threshold:    500,
+			want:         true,
+		},
+		{
+			name:         "absolute threshold exactly at estimate",
+			input:        300,
+			output:       200,
+			added:        0,
+			contextLimit: 100000,
+			threshold:    500,
+			want:         false,
+		},
+		{
+			name:         "absolute threshold overrides zero context limit",
+			input:        600,
+			output:       0,
+			added:        0,
+			contextLimit: 0,
+			threshold:    500,
+			want:         true,
+		},
+		{
+			name:         "zero threshold falls back to default behavior",
+			input:        1000,
+			output:       0,
+			added:        0,
+			contextLimit: 100000,
+			threshold:    0,
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := ShouldCompactWithThreshold(tt.input, tt.output, tt.added, tt.contextLimit, tt.threshold)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestHasConversationMessages(t *testing.T) {
 	t.Parallel()
 

@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -109,6 +110,10 @@ func (p *chatPage) handleRuntimeEvent(msg tea.Msg) (bool, tea.Cmd) {
 
 	case *runtime.AgentInfoEvent:
 		sidebarCmd := p.sidebar.SetAgentInfo(msg.AgentName, msg.Model, msg.Description)
+		if msg.Instruction != "" {
+			p.app.SetSystemPrompt(msg.Instruction)
+		}
+		p.messages.AddSystemPromptMessage(msg.Instruction)
 		p.messages.AddWelcomeMessage(msg.WelcomeMessage)
 		return true, sidebarCmd
 
@@ -266,7 +271,16 @@ func (p *chatPage) handleStreamStopped(msg *runtime.StreamStoppedEvent) tea.Cmd 
 		})
 	}
 
-	return tea.Batch(p.messages.ScrollToBottom(), spinnerCmd, sidebarCmd, queueCmd, exitCmd)
+	// Auto-export session if configured (runs in background to avoid blocking the UI).
+	var autoExportCmd tea.Cmd
+	if p.app.AutoExportEnabled() {
+		autoExportCmd = func() tea.Msg {
+			p.app.RunAutoExport(context.Background())
+			return nil
+		}
+	}
+
+	return tea.Batch(p.messages.ScrollToBottom(), spinnerCmd, sidebarCmd, queueCmd, exitCmd, autoExportCmd)
 }
 
 // handlePartialToolCall processes partial tool call events by rendering each

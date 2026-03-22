@@ -48,6 +48,7 @@ Named models let you configure temperature, token limits, thinking budgets, and 
 | Provider            | Key              | Example Models                       | API Key Env Var     |
 | ------------------- | ---------------- | ------------------------------------ | ------------------- |
 | OpenAI              | `openai`         | gpt-4o, gpt-5, gpt-5-mini            | `OPENAI_API_KEY`    |
+| OpenRouter          | `openrouter`     | openai/gpt-5-mini, openai/o3-mini    | `OPENROUTER_API_KEY` |
 | Anthropic           | `anthropic`      | claude-sonnet-4-0, claude-sonnet-4-5 | `ANTHROPIC_API_KEY` |
 | Google              | `google`         | gemini-2.5-flash, gemini-3-pro       | `GOOGLE_API_KEY`    |
 | AWS Bedrock         | `amazon-bedrock` | Claude, Nova, Llama models           | AWS credentials     |

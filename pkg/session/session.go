@@ -32,6 +32,11 @@ type Item struct {
 	// Message holds a regular conversation message
 	Message *Message `json:"message,omitempty"`
 
+	// CompactionMessages holds a structured replacement context produced by
+	// compaction. These messages replace older conversation history while newer
+	// items in the session remain intact.
+	CompactionMessages []chat.Message `json:"compaction_messages,omitempty"`
+
 	// SubSession holds a complete sub-session from task transfers
 	SubSession *Session `json:"sub_session,omitempty"`
 
@@ -46,6 +51,11 @@ type Item struct {
 // IsMessage returns true if this item contains a message
 func (si *Item) IsMessage() bool {
 	return si.Message != nil
+}
+
+// IsCompaction returns true if this item contains structured compacted history.
+func (si *Item) IsCompaction() bool {
+	return si.CompactionMessages != nil
 }
 
 // IsSubSession returns true if this item contains a sub-session
@@ -212,6 +222,14 @@ func NewMessageItem(msg *Message) Item {
 	return Item{Message: msg}
 }
 
+// NewCompactionItem creates a SessionItem containing compacted replacement messages.
+func NewCompactionItem(messages []chat.Message, cost float64) Item {
+	if messages == nil {
+		messages = []chat.Message{}
+	}
+	return Item{CompactionMessages: deepCopyChatMessages(messages), Cost: cost}
+}
+
 // NewSubSessionItem creates a SessionItem containing a sub-session
 func NewSubSessionItem(subSession *Session) Item {
 	return Item{SubSession: subSession}
@@ -288,6 +306,21 @@ func deepCopyChatMessage(m chat.Message) chat.Message {
 	return m
 }
 
+func deepCopyChatMessages(messages []chat.Message) []chat.Message {
+	if messages == nil {
+		return nil
+	}
+	if len(messages) == 0 {
+		return []chat.Message{}
+	}
+
+	cloned := make([]chat.Message, len(messages))
+	for i, msg := range messages {
+		cloned[i] = deepCopyChatMessage(msg)
+	}
+	return cloned
+}
+
 // Session helper methods
 
 // AddMessage adds a message to the session
@@ -337,9 +370,12 @@ func (s *Session) GetAllMessages() []Message {
 	s.mu.RLock()
 	items := make([]Item, len(s.Messages))
 	for i, item := range s.Messages {
-		if item.Message != nil {
+		switch {
+		case item.Message != nil:
 			items[i] = Item{Message: deepCopyMessage(item.Message)}
-		} else {
+		case item.IsCompaction():
+			items[i] = Item{CompactionMessages: deepCopyChatMessages(item.CompactionMessages), Cost: item.Cost}
+		default:
 			items[i] = item
 		}
 	}
@@ -347,9 +383,16 @@ func (s *Session) GetAllMessages() []Message {
 
 	var messages []Message
 	for _, item := range items {
-		if item.IsMessage() && item.Message.Message.Role != chat.MessageRoleSystem {
+		switch {
+		case item.IsMessage() && item.Message.Message.Role != chat.MessageRoleSystem:
 			messages = append(messages, *item.Message)
-		} else if item.IsSubSession() {
+		case item.IsCompaction():
+			for _, msg := range item.CompactionMessages {
+				if msg.Role != chat.MessageRoleSystem {
+					messages = append(messages, Message{Message: deepCopyChatMessage(msg)})
+				}
+			}
+		case item.IsSubSession():
 			// Recursively get messages from sub-sessions
 			subMessages := item.SubSession.GetAllMessages()
 			messages = append(messages, subMessages...)
@@ -592,6 +635,25 @@ func markLastMessageAsCacheControl(messages []chat.Message) {
 	}
 }
 
+// BuildFullSystemPrompt returns the concatenated text of all system messages
+// (both invariant and context-specific) for display purposes.
+func BuildFullSystemPrompt(a *agent.Agent, s *Session) string {
+	var parts []string
+	for _, msg := range buildInvariantSystemMessages(a) {
+		if msg.Content != "" {
+			parts = append(parts, msg.Content)
+		}
+	}
+	if s != nil {
+		for _, msg := range buildContextSpecificSystemMessages(a, s) {
+			if msg.Content != "" {
+				parts = append(parts, msg.Content)
+			}
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 // buildInvariantSystemMessages builds system messages that are identical
 // for all users of a given agent configuration. These messages can be
 // cached efficiently as they don't change between sessions, users, or projects.
@@ -718,36 +780,55 @@ func buildContextSpecificSystemMessages(a *agent.Agent, s *Session) []chat.Messa
 				})
 			}
 		}
+
+		for _, script := range a.AddPromptScripts() {
+			output, err := runPromptScript(wd, script)
+			if err != nil {
+				slog.Error("running prompt script", "script", script, "error", err)
+				continue
+			}
+			if output != "" {
+				messages = append(messages, chat.Message{
+					Role:    chat.MessageRoleSystem,
+					Content: output,
+				})
+			}
+		}
 	}
 
 	return messages
 }
 
-// buildSessionSummaryMessages builds system messages containing the session summary
-// if one exists. Session summaries are context-specific per session and thus should not have a checkpoint (they will be cached alongside the first user message anyway)
+// buildCompactionMessages builds compaction messages for the most recent
+// summary or structured compaction item. These items are context-specific per
+// session and thus should not have a checkpoint.
 //
-// lastSummaryIndex is the index of the last summary item in s.Messages, or -1 if none exists.
-func buildSessionSummaryMessages(items []Item) ([]chat.Message, int) {
+// lastCompactionIndex is the index of the last compaction item in s.Messages,
+// or -1 if none exists.
+func buildCompactionMessages(items []Item) ([]chat.Message, int) {
 	var messages []chat.Message
-	// Find the last summary index to determine where conversation messages start
-	// and to include the summary in session summary messages
-	lastSummaryIndex := -1
+	lastCompactionIndex := -1
 	for i := len(items) - 1; i >= 0; i-- {
-		if items[i].Summary != "" {
-			lastSummaryIndex = i
+		if items[i].Summary != "" || items[i].IsCompaction() {
+			lastCompactionIndex = i
 			break
 		}
 	}
 
-	if lastSummaryIndex >= 0 && lastSummaryIndex < len(items) {
-		messages = append(messages, chat.Message{
-			Role:      chat.MessageRoleUser,
-			Content:   "Session Summary: " + items[lastSummaryIndex].Summary,
-			CreatedAt: time.Now().Format(time.RFC3339),
-		})
+	if lastCompactionIndex >= 0 && lastCompactionIndex < len(items) {
+		item := items[lastCompactionIndex]
+		if item.IsCompaction() {
+			messages = append(messages, deepCopyChatMessages(item.CompactionMessages)...)
+		} else {
+			messages = append(messages, chat.Message{
+				Role:      chat.MessageRoleUser,
+				Content:   "Session Summary: " + item.Summary,
+				CreatedAt: time.Now().Format(time.RFC3339),
+			})
+		}
 	}
 
-	return messages, lastSummaryIndex
+	return messages, lastCompactionIndex
 }
 
 func (s *Session) GetMessages(a *agent.Agent) []chat.Message {
@@ -766,23 +847,26 @@ func (s *Session) GetMessages(a *agent.Agent) []chat.Message {
 	s.mu.RLock()
 	items := make([]Item, len(s.Messages))
 	for i, item := range s.Messages {
-		if item.Message != nil {
-			items[i] = Item{Message: deepCopyMessage(item.Message), Summary: item.Summary, SubSession: item.SubSession, Cost: item.Cost}
-		} else {
+		switch {
+		case item.Message != nil:
+			items[i] = Item{Message: deepCopyMessage(item.Message), CompactionMessages: deepCopyChatMessages(item.CompactionMessages), Summary: item.Summary, SubSession: item.SubSession, Cost: item.Cost}
+		case item.IsCompaction():
+			items[i] = Item{CompactionMessages: deepCopyChatMessages(item.CompactionMessages), Summary: item.Summary, SubSession: item.SubSession, Cost: item.Cost}
+		default:
 			items[i] = item
 		}
 	}
 	s.mu.RUnlock()
 
-	// Build session summary messages (vary per session)
-	summaryMessages, lastSummaryIndex := buildSessionSummaryMessages(items)
+	// Build session compaction messages (vary per session)
+	compactionMessages, lastCompactionIndex := buildCompactionMessages(items)
 
 	var messages []chat.Message
 	messages = append(messages, invariantMessages...)
 	messages = append(messages, contextMessages...)
-	messages = append(messages, summaryMessages...)
+	messages = append(messages, compactionMessages...)
 
-	startIndex := lastSummaryIndex + 1
+	startIndex := lastCompactionIndex + 1
 
 	// Begin adding conversation messages
 	for i := startIndex; i < len(items); i++ {
@@ -792,7 +876,12 @@ func (s *Session) GetMessages(a *agent.Agent) []chat.Message {
 		}
 	}
 
-	maxItems := a.NumHistoryItems()
+	// For rolling compaction with a message threshold, trim to keep only
+	// the most recent N conversation messages (plus all system messages).
+	var maxItems int
+	if cfg := a.CompactionConfig(); cfg != nil {
+		maxItems = cfg.Threshold.Messages()
+	}
 	if maxItems > 0 {
 		messages = trimMessages(messages, maxItems)
 	}
@@ -823,7 +912,7 @@ func (s *Session) GetMessages(a *agent.Agent) []chat.Message {
 		"total_messages", len(messages),
 		"system_messages", systemCount,
 		"conversation_messages", conversationCount,
-		"max_history_items", maxItems)
+		"max_rolling_messages", maxItems)
 
 	return messages
 }

@@ -131,7 +131,11 @@ func (r *PersistentRuntime) handleEvent(ctx context.Context, sess *session.Sessi
 		}
 
 	case *SessionSummaryEvent:
-		if err := r.sessionStore.AddSummary(ctx, e.SessionID, e.Summary); err != nil {
+		if e.CompactionMessages != nil {
+			if err := r.sessionStore.AddCompactionMessages(ctx, e.SessionID, e.CompactionMessages); err != nil {
+				slog.Warn("Failed to persist compaction messages", "session_id", e.SessionID, "error", err)
+			}
+		} else if err := r.sessionStore.AddSummary(ctx, e.SessionID, e.Summary); err != nil {
 			slog.Warn("Failed to persist summary", "session_id", e.SessionID, "error", err)
 		}
 
@@ -191,4 +195,19 @@ func (r *PersistentRuntime) Run(ctx context.Context, sess *session.Session) ([]s
 	}
 
 	return sess.GetAllMessages(), nil
+}
+
+// Summarize wraps LocalRuntime.Summarize so direct compaction requests are also persisted.
+func (r *PersistentRuntime) Summarize(ctx context.Context, sess *session.Session, additionalPrompt string, events chan Event) {
+	innerEvents := make(chan Event, 16)
+	r.LocalRuntime.Summarize(ctx, sess, additionalPrompt, innerEvents)
+	close(innerEvents)
+
+	streaming := &streamingState{}
+	for event := range innerEvents {
+		r.handleEvent(ctx, sess, event, streaming)
+		if events != nil {
+			events <- event
+		}
+	}
 }

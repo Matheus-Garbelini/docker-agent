@@ -33,7 +33,7 @@ docker agent run agent.yaml
 
 - **Multi-agent architecture** — Create teams of specialized agents that delegate tasks automatically
 - **Rich tool ecosystem** — Built-in tools + any [MCP](https://modelcontextprotocol.io/) server (local, remote, or Docker-based)
-- **AI provider agnostic** — OpenAI, Anthropic, Gemini, AWS Bedrock, Mistral, xAI, [Docker Model Runner](https://docs.docker.com/ai/model-runner/), and more
+- **AI provider agnostic** — OpenAI, OpenRouter, Anthropic, Gemini, AWS Bedrock, Mistral, xAI, [Docker Model Runner](https://docs.docker.com/ai/model-runner/), and more
 - **YAML configuration** — Declarative, versionable, shareable
 - **Advanced reasoning** — Built-in think, todo, and memory tools
 - **RAG** — Pluggable retrieval with BM25, embeddings, hybrid search, and reranking
@@ -50,7 +50,7 @@ docker agent run agent.yaml
 Set at least one API key (or use [Docker Model Runner](https://docs.docker.com/ai/model-runner/) for local models):
 
 ```sh
-export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
+export OPENAI_API_KEY=sk-...        # or OPENROUTER_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
 ```
 
 ## Quick Start

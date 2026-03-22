@@ -1,0 +1,9 @@
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Demonstrates summary-based session compaction with a model override.
+    instruction: You are a helpful assistant.
+    compaction:
+      type: summary
+      threshold: "90%"
+      model: openai/gpt-4o-mini

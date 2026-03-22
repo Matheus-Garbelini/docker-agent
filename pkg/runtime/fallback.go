@@ -281,7 +281,7 @@ func (r *LocalRuntime) tryModelWithFallback(
 			// of the selected sub-model's YAML-configured name.
 			if rp, ok := modelEntry.provider.(interface{ LastSelectedModelID() string }); ok {
 				if selected := rp.LastSelectedModelID(); selected != "" {
-					events <- AgentInfo(a.Name(), selected, a.Description(), a.WelcomeMessage())
+					events <- AgentInfo(a.Name(), selected, a.Description(), a.WelcomeMessage(), a.Instruction())
 				}
 			}
 

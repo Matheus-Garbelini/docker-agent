@@ -15,8 +15,13 @@ Some of these agents use [built-in tools](../docs/index.html#configuration/tools
 | [contradict.yaml](contradict.yaml)     | Contrarian viewpoint provider          |            |       |      |       |        |             |            |
 | [silvia.yaml](silvia.yaml)             | Sylvia Plath-inspired poetic AI        |            |       |      |       |        |             |            |
 | [script_shell.yaml](script_shell.yaml) | Agent with custom shell commands       |            | ✓     |      |       |        |             |            |
+| [compaction_script.yaml](compaction_script.yaml) | Custom compaction with external script  |            |       |      |       |        |             |            |
+| [compaction_summary.yaml](compaction_summary.yaml) | Summary compaction with model override |            |       |      |       |        |             |            |
+| [compaction_rolling.yaml](compaction_rolling.yaml) | Rolling compaction (keep recent msgs)  |            |       |      |       |        |             |            |
+| [compaction_agent.yaml](compaction_agent.yaml) | Agent-based session compaction          |            |       |      |       |        |             | ✓          |
 | [mem.yaml](mem.yaml)                   | Humorous AI with persistent memory     | ✓          |       |      |       | ✓      |             |            |
 | [diag.yaml](diag.yaml)                 | Log analysis and diagnostics           | ✓          | ✓     |      | ✓     |        |             |            |
+| [openrouter.yaml](openrouter.yaml)     | OpenRouter chat and embeddings setup   |            |       |      | ✓     |        |             |            |
 | [todo.yaml](todo.yaml)                 | Task manager example                   |            |       | ✓    |       |        |             |            |
 | [toolset_instructions.yaml](toolset_instructions.yaml) | Enriching toolset instructions with `{ORIGINAL_INSTRUCTIONS}` | ✓ | ✓ |      |       |        |             |            |
 | [pythonista.yaml](pythonista.yaml)     | Python programming assistant           | ✓          | ✓     |      |       |        |             |            |

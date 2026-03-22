@@ -1,0 +1,16 @@
+agents:
+  root:
+    model: openai/gpt-4o
+    description: Demonstrates agent-based session compaction.
+    instruction: You are a helpful assistant.
+    compaction:
+      type: agent
+      threshold: 180000
+      agent: compaction_agent
+
+  compaction_agent:
+    model: openai/gpt-4o-mini
+    description: Summarizes conversations efficiently for session compaction.
+    instruction: >
+      You are a session compaction specialist. Summarize conversations concisely
+      while preserving key decisions, code snippets, and action items.

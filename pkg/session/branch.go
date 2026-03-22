@@ -41,6 +41,8 @@ func cloneSessionItem(item Item) (Item, error) {
 	switch {
 	case item.Message != nil:
 		return Item{Message: cloneMessage(item.Message)}, nil
+	case item.IsCompaction():
+		return Item{CompactionMessages: deepCopyChatMessages(item.CompactionMessages), Cost: item.Cost}, nil
 	case item.SubSession != nil:
 		clonedSub, err := cloneSubSession(item.SubSession)
 		if err != nil {

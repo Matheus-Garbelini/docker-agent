@@ -1,0 +1,30 @@
+#!/usr/bin/env docker agent run
+
+agents:
+  root:
+    model: router-web
+    description: assistant routed through OpenRouter
+    instruction: |
+      You are a helpful assistant.
+      Prefer concise answers and cite external sources when web search is used.
+    commands:
+      demo: give me a short summary of the latest Docker Model Runner updates
+
+models:
+  router-web:
+    provider: openrouter
+    model: openai/gpt-5-mini
+    thinking_budget: medium
+    provider_opts:
+      x_title: docker-agent-example
+      provider:
+        sort: throughput
+        allow_fallbacks: true
+      plugins:
+        - id: web
+      web_search_options:
+        search_context_size: medium
+
+  router-embedding:
+    provider: openrouter
+    model: openai/text-embedding-3-small

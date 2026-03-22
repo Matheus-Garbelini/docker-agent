@@ -140,6 +140,7 @@ API keys and secrets are read from environment variables — never stored in con
 | Variable            | Provider      |
 | ------------------- | ------------- |
 | `OPENAI_API_KEY`    | OpenAI        |
+| `OPENROUTER_API_KEY` | OpenRouter   |
 | `ANTHROPIC_API_KEY` | Anthropic     |
 | `GOOGLE_API_KEY`    | Google Gemini |
 | `MISTRAL_API_KEY`   | Mistral       |

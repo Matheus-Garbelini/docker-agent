@@ -130,6 +130,7 @@ func LoadWithConfig(ctx context.Context, agentSource config.Source, runConfig *c
 		ModelsGateway: runConfig.ModelsGateway,
 		Env:           env,
 		Models:        cfg.Models,
+		Providers:     cfg.Providers,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RAG managers: %w", err)
@@ -169,10 +170,10 @@ func LoadWithConfig(ctx context.Context, agentSource config.Source, runConfig *c
 			agent.WithAddEnvironmentInfo(agentConfig.AddEnvironmentInfo),
 			agent.WithAddDescriptionParameter(agentConfig.AddDescriptionParameter),
 			agent.WithAddPromptFiles(promptFiles),
+			agent.WithAddPromptScripts(agentConfig.AddPromptScripts),
 			agent.WithMaxIterations(agentConfig.MaxIterations),
 			agent.WithMaxConsecutiveToolCalls(agentConfig.MaxConsecutiveToolCalls),
-			agent.WithMaxOldToolCallTokens(agentConfig.MaxOldToolCallTokens),
-			agent.WithNumHistoryItems(agentConfig.NumHistoryItems),
+			agent.WithCompaction(agentConfig.Compaction),
 			agent.WithCommands(expander.ExpandCommands(ctx, agentConfig.Commands)),
 			agent.WithHooks(config.MergeHooks(agentConfig.Hooks, cliHooks)),
 		}

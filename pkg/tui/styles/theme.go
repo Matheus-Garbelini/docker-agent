@@ -1015,6 +1015,14 @@ func rebuildStyles() {
 		BorderStyle(lipgloss.ThickBorder()).
 		BorderForeground(Success)
 
+	SystemPromptStyle = BaseMessageStyle.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(BorderMuted)
+
+	SystemPromptHeaderStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(TextMuted)
+
 	// Dialog styles
 	DialogStyle = BaseStyle.
 		Border(lipgloss.RoundedBorder()).

@@ -68,6 +68,15 @@ func TestApplyModelDefaults(t *testing.T) {
 			name:   "custom openai_chatcompletions: no default thinking",
 			config: &latest.ModelConfig{Provider: "custom", Model: "custom-model", ProviderOpts: map[string]any{"api_type": "openai_chatcompletions"}},
 		},
+		{
+			name:       "openrouter openai/o3-mini: thinking-only model gets default",
+			config:     &latest.ModelConfig{Provider: "openrouter", Model: "openai/o3-mini"},
+			wantBudget: &latest.ThinkingBudget{Effort: "medium"},
+		},
+		{
+			name:   "openrouter openai/gpt-5-mini: no default thinking",
+			config: &latest.ModelConfig{Provider: "openrouter", Model: "openai/gpt-5-mini"},
+		},
 
 		// --- Anthropic: no default, but interleaved_thinking when budget set ---
 		{
@@ -255,6 +264,7 @@ func TestIsOpenAIThinkingOnlyModel(t *testing.T) {
 		{"gpt-4o", false},
 		{"gpt-4.1", false},
 		{"gpt-5", false},
+		{"openai/o3-mini", false},
 		{"custom-model", false},
 	} {
 		t.Run(tt.model, func(t *testing.T) {
